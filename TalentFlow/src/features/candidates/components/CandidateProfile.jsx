@@ -1,5 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import NotesSection from './NotesSection';
+
+// Stage validation logic (same as Kanban)
+const getStageOrder = () => ['applied', 'screen', 'tech', 'offer', 'hired'];
+
+const isValidStageTransition = (fromStage, toStage) => {
+  const stageOrder = getStageOrder();
+  const fromIndex = stageOrder.indexOf(fromStage);
+  const toIndex = stageOrder.indexOf(toStage);
+  
+  if (fromStage === 'hired' || fromStage === 'rejected') return false;
+  if (toStage === 'rejected') return fromStage !== 'rejected' && fromStage !== 'hired';
+  if (fromIndex === -1 || toIndex === -1) return false;
+  
+  return toIndex >= fromIndex;
+};
 
 const CandidateProfile = () => {
   const { id } = useParams();
@@ -7,8 +23,10 @@ const CandidateProfile = () => {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
-  const [newNote, setNewNote] = useState('');
-  const [addingNote, setAddingNote] = useState(false);
+
+  // 🎨 SAVING ANIMATION STATES
+  const [savingStage, setSavingStage] = useState(null);
+  const [savedStage, setSavedStage] = useState(null);
 
   const stages = [
     { key: 'applied', label: 'Applied', icon: '🎯', color: 'from-slate-500 to-slate-600', bg: 'bg-slate-100', text: 'text-slate-700' },
@@ -33,8 +51,33 @@ const CandidateProfile = () => {
     }
   };
 
+  // 🔧 ENHANCED STAGE UPDATE WITH VALIDATION
   const updateStage = async (newStage) => {
+    if (!candidate) return;
+
+    // ✅ VALIDATE TRANSITION FIRST
+    if (!isValidStageTransition(candidate.stage, newStage)) {
+      const errorMessages = {
+        hired: '🔒 Hired candidates cannot be moved to other stages.',
+        rejected: '🔒 Rejected candidates cannot be moved to other stages.',
+        default: '📈 Candidates can only move forward through stages or be rejected.'
+      };
+      
+      let message = errorMessages.default;
+      if (candidate.stage === 'hired' || candidate.stage === 'rejected') {
+        message = errorMessages[candidate.stage];
+      } else if (newStage === 'hired' && candidate.stage !== 'offer') {
+        message = '📋 Candidates can only be hired from the Offer stage.';
+      }
+      
+      alert(`❌ Invalid Stage Change!\n\n${message}`);
+      return;
+    }
+
+    // 🎨 START SAVING ANIMATION
+    setSavingStage(newStage);
     setUpdating(newStage);
+
     try {
       const response = await fetch(`/api/candidates/${id}`, {
         method: 'PATCH',
@@ -44,39 +87,24 @@ const CandidateProfile = () => {
 
       if (response.ok) {
         const updated = await response.json();
+        
+        // 🎉 SUCCESS ANIMATION
+        setSavingStage(null);
+        setSavedStage(newStage);
         setCandidate(updated);
+
+        // Clear success animation after 2 seconds
+        setTimeout(() => setSavedStage(null), 2000);
+      } else {
+        console.error('Failed to update stage');
+        alert('Failed to update candidate stage. Please try again.');
       }
     } catch (error) {
       console.error('Error updating stage:', error);
+      alert('Network error. Please try again.');
     } finally {
       setUpdating(false);
-    }
-  };
-
-  const addNote = async () => {
-    if (!newNote.trim()) return;
-    
-    setAddingNote(true);
-    try {
-      // Simulate adding note (you can enhance this with proper API)
-      const noteData = {
-        id: Date.now(),
-        content: newNote,
-        author: 'Current User',
-        timestamp: new Date().toISOString(),
-        mentions: []
-      };
-
-      setCandidate(prev => ({
-        ...prev,
-        notes: [...(prev.notes || []), noteData]
-      }));
-      
-      setNewNote('');
-    } catch (error) {
-      console.error('Error adding note:', error);
-    } finally {
-      setAddingNote(false);
+      setSavingStage(null);
     }
   };
 
@@ -143,23 +171,38 @@ const CandidateProfile = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50">
-  
-      
-         
- <div className="mb-4">
-    <Link 
-      to="/candidates" 
-      className="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full transition-all text-sm"
-    >
-      <span className="mr-2">←</span>
-      Back to Candidates
-    </Link>
-  </div>
+      {/* 🎨 SAVING NOTIFICATION */}
+      {savingStage && (
+        <div className="fixed top-4 right-4 z-50 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center animate-slideIn">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-3"></div>
+          <span className="font-medium">Updating stage to {stages.find(s => s.key === savingStage)?.label}...</span>
+        </div>
+      )}
 
-      {/* Creative Layout */}
+      {/* 🎉 SUCCESS NOTIFICATION */}
+      {savedStage && (
+        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center animate-slideIn">
+          <div className="w-4 h-4 rounded-full bg-white flex items-center justify-center mr-3">
+            <span className="text-green-500 text-xs">✓</span>
+          </div>
+          <span className="font-medium">Stage updated successfully!</span>
+        </div>
+      )}
+
       <div className="relative">
         {/* Left Side - Candidate Info */}
         <div className="absolute top-0 left-0 w-2/5 h-screen overflow-y-auto p-8">
+          {/* Back Button */}
+          <div className="mb-4">
+            <Link 
+              to="/candidates" 
+              className="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full transition-all text-sm"
+            >
+              <span className="mr-2">←</span>
+              Back to Candidates
+            </Link>
+          </div>
+
           {/* Profile Card */}
           <div className="bg-white rounded-3xl shadow-xl overflow-hidden mb-6 transform hover:scale-[1.02] transition-transform">
             <div className={`h-32 bg-gradient-to-r ${currentStage.color} relative overflow-hidden`}>
@@ -264,10 +307,10 @@ const CandidateProfile = () => {
           {/* Tab Navigation */}
           <div className="flex space-x-2 mb-6">
             {[
-              { key: 'overview', label: '🎯 Overview', icon: '📊' },
-              { key: 'timeline', label: '📅 Timeline', icon: '🕐' },
-              { key: 'notes', label: '📝 Notes', icon: '💭' },
-              { key: 'actions', label: '⚡ Actions', icon: '🎮' }
+              { key: 'overview', label: '🎯 Overview' },
+              { key: 'timeline', label: '📅 Timeline' },
+              { key: 'notes', label: '📝 Notes' },
+              { key: 'actions', label: '⚡ Actions' }
             ].map(tab => (
               <button
                 key={tab.key}
@@ -287,36 +330,32 @@ const CandidateProfile = () => {
           <div className="space-y-6">
             {/* Overview */}
             {activeTab === 'overview' && (
-              <div className="space-y-6">
-                {/* Stage Progress */}
-                <div className="bg-white rounded-3xl shadow-xl p-6">
-                  <h3 className="text-xl font-bold text-gray-900 mb-6">🚀 Hiring Journey</h3>
-                  <div className="relative">
-                    <div className="absolute left-4 top-0 bottom-0 w-1 bg-gray-200"></div>
-                    <div className="space-y-4">
-                      {stages.map((stage, index) => {
-                        const isPast = index < stageIndex;
-                        const isCurrent = index === stageIndex;
-                        const isFuture = index > stageIndex;
-                        
-                        return (
-                          <div key={stage.key} className="relative flex items-center">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center z-10 ${
-                              isCurrent ? `bg-gradient-to-r ${stage.color} text-white shadow-lg` :
-                              isPast ? 'bg-green-500 text-white' :
-                              'bg-gray-200 text-gray-400'
-                            }`}>
-                              {isPast ? '✓' : stage.icon}
-                            </div>
-                            <div className="ml-4">
-                              <div className={`font-medium ${isCurrent ? 'text-gray-900' : isPast ? 'text-green-600' : 'text-gray-400'}`}>
-                                {stage.label}
-                              </div>
+              <div className="bg-white rounded-3xl shadow-xl p-6">
+                <h3 className="text-xl font-bold text-gray-900 mb-6">🚀 Hiring Journey</h3>
+                <div className="relative">
+                  <div className="absolute left-4 top-0 bottom-0 w-1 bg-gray-200"></div>
+                  <div className="space-y-4">
+                    {stages.map((stage, index) => {
+                      const isPast = index < stageIndex;
+                      const isCurrent = index === stageIndex;
+                      
+                      return (
+                        <div key={stage.key} className="relative flex items-center">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center z-10 ${
+                            isCurrent ? `bg-gradient-to-r ${stage.color} text-white shadow-lg` :
+                            isPast ? 'bg-green-500 text-white' :
+                            'bg-gray-200 text-gray-400'
+                          }`}>
+                            {isPast ? '✓' : stage.icon}
+                          </div>
+                          <div className="ml-4">
+                            <div className={`font-medium ${isCurrent ? 'text-gray-900' : isPast ? 'text-green-600' : 'text-gray-400'}`}>
+                              {stage.label}
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -327,104 +366,104 @@ const CandidateProfile = () => {
               <div className="bg-white rounded-3xl shadow-xl p-6">
                 <h3 className="text-xl font-bold text-gray-900 mb-6">📅 Activity Timeline</h3>
                 <div className="space-y-4">
-                  {candidate.timeline?.map((event) => {
-                    const eventStage = getStageInfo(event.stage);
-                    return (
-                      <div key={event.id} className="flex items-start p-4 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-colors">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center mr-4 ${eventStage.bg} ${eventStage.text}`}>
-                          {eventStage.icon}
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900">{event.note}</div>
-                          <div className="text-sm text-gray-500 mt-1">
-                            {formatFullDate(event.timestamp)} • by {event.user}
+                  {candidate.timeline?.length > 0 ? (
+                    candidate.timeline.map((event) => {
+                      const eventStage = getStageInfo(event.stage);
+                      return (
+                        <div key={event.id} className="flex items-start p-4 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-colors">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center mr-4 ${eventStage.bg} ${eventStage.text}`}>
+                            {eventStage.icon}
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-900">{event.note}</div>
+                            <div className="text-sm text-gray-500 mt-1">
+                              {formatFullDate(event.timestamp)} • by {event.user}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Notes */}
-            {activeTab === 'notes' && (
-              <div className="space-y-6">
-                {/* Add Note */}
-                <div className="bg-white rounded-3xl shadow-xl p-6">
-                  <h3 className="text-xl font-bold text-gray-900 mb-4">✍️ Add Note</h3>
-                  <div className="space-y-4">
-                    <textarea
-                      value={newNote}
-                      onChange={(e) => setNewNote(e.target.value)}
-                      placeholder="Write a note about this candidate..."
-                      className="w-full h-24 px-4 py-3 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                    />
-                    <button
-                      onClick={addNote}
-                      disabled={!newNote.trim() || addingNote}
-                      className={`px-6 py-3 bg-gradient-to-r ${currentStage.color} text-white rounded-2xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium`}
-                    >
-                      {addingNote ? '💫 Adding...' : '🚀 Add Note'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Notes List */}
-                <div className="bg-white rounded-3xl shadow-xl p-6">
-                  <h3 className="text-xl font-bold text-gray-900 mb-6">💭 Notes History</h3>
-                  {candidate.notes?.length > 0 ? (
-                    <div className="space-y-4">
-                      {candidate.notes.map((note) => (
-                        <div key={note.id} className="p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-2xl">
-                          <p className="text-gray-900 mb-2">{note.content}</p>
-                          <div className="text-sm text-gray-500">
-                            <span className="font-medium">{note.author}</span> • {formatFullDate(note.timestamp)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                      );
+                    })
                   ) : (
                     <div className="text-center py-12 text-gray-500">
-                      <div className="text-4xl mb-4">📝</div>
-                      <p>No notes yet. Add the first one!</p>
+                      <div className="text-4xl mb-4">📅</div>
+                      <p>No timeline events yet.</p>
                     </div>
                   )}
                 </div>
               </div>
             )}
 
+            {/* Notes */}
+            {activeTab === 'notes' && (
+              <NotesSection 
+                candidate={candidate} 
+                setCandidate={setCandidate} 
+                currentStage={currentStage}
+                formatFullDate={formatFullDate}
+              />
+            )}
+
             {/* Actions */}
             {activeTab === 'actions' && (
               <div className="bg-white rounded-3xl shadow-xl p-6">
-                <h3 className="text-xl font-bold text-gray-900 mb-6">⚡ Quick Actions</h3>
+                <h3 className="text-xl font-bold text-gray-900 mb-6">⚡ Stage Management</h3>
                 <div className="grid grid-cols-2 gap-4">
                   {stages.map((stage) => {
                     const isActive = candidate.stage === stage.key;
-                    const isUpdating = updating === stage.key;
+                    const isUpdatingThis = updating === stage.key;
+                    const isSavingThis = savingStage === stage.key;
+                    const isSavedThis = savedStage === stage.key;
+                    const canTransition = isValidStageTransition(candidate.stage, stage.key);
                     
                     return (
                       <button
                         key={stage.key}
                         onClick={() => updateStage(stage.key)}
-                        disabled={isActive || isUpdating}
-                        className={`p-4 rounded-2xl text-left transition-all ${
+                        disabled={isActive || isUpdatingThis || !canTransition}
+                        className={`p-4 rounded-2xl text-left transition-all relative ${
                           isActive
                             ? `bg-gradient-to-r ${stage.color} text-white shadow-lg cursor-default`
-                            : `${stage.bg} ${stage.text} hover:shadow-md`
-                        } disabled:opacity-75`}
+                            : canTransition
+                            ? `${stage.bg} ${stage.text} hover:shadow-md hover:scale-105`
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                        } ${isSavedThis ? 'ring-2 ring-green-500' : ''}`}
                       >
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="text-lg mb-1">{stage.icon}</div>
                             <div className="font-medium">{stage.label}</div>
+                            {!canTransition && !isActive && (
+                              <div className="text-xs mt-1 opacity-75">Not available</div>
+                            )}
                           </div>
-                          {isUpdating && <span className="animate-spin">⏳</span>}
-                          {isActive && <span className="text-2xl">✓</span>}
+                          <div className="flex items-center space-x-2">
+                            {isSavingThis && <span className="animate-spin">⏳</span>}
+                            {isActive && <span className="text-2xl">✓</span>}
+                            {isSavedThis && <span className="text-green-500 text-xl animate-bounce">✓</span>}
+                          </div>
                         </div>
+
+                        {/* Saving overlay */}
+                        {isSavingThis && (
+                          <div className="absolute inset-0 bg-blue-500/20 rounded-2xl animate-pulse"></div>
+                        )}
                       </button>
                     );
                   })}
+                </div>
+
+                {/* Stage Rules Info */}
+                <div className="mt-6 p-4 bg-gray-50 rounded-xl">
+                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center">
+                    <span className="mr-2">💡</span>
+                    Stage Transition Rules
+                  </h4>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• Candidates can only move forward through stages</li>
+                    <li>• Candidates can be rejected from any stage (except hired)</li>
+                    <li>• Hired and rejected are final states</li>
+                    <li>• Only candidates with offers can be hired</li>
+                  </ul>
                 </div>
               </div>
             )}
