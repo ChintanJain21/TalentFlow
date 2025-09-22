@@ -2,8 +2,19 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { GripVertical, ExternalLink, Lock, Briefcase, MapPin, DollarSign } from 'lucide-react';
+import { useTheme } from '../../../contexts/ThemeContext';
 
-const KanbanCard = ({ candidate, isOverlay = false, stageColor = 'bg-blue-500', lightColor = 'bg-blue-50' }) => {
+const KanbanCard = ({ 
+  candidate, 
+  isOverlay = false, 
+  stageColor = 'bg-blue-500', 
+  lightColor = 'bg-blue-50 dark:bg-blue-900/20',
+  jobs = [],
+  getJobInfo
+}) => {
+  const { isDark } = useTheme();
+
   if (!candidate || typeof candidate !== 'object') {
     return null;
   }
@@ -34,6 +45,9 @@ const KanbanCard = ({ candidate, isOverlay = false, stageColor = 'bg-blue-500', 
   const candidateSkills = Array.isArray(candidate.skills) ? candidate.skills : [];
   const candidateAppliedDate = candidate.appliedDate || new Date().toISOString();
 
+  // Get job info if available
+  const jobInfo = getJobInfo ? getJobInfo(candidate.jobId) : null;
+
   const getInitials = (name) => {
     return name.split(' ')
       .map(n => n[0] || '')
@@ -48,7 +62,6 @@ const KanbanCard = ({ candidate, isOverlay = false, stageColor = 'bg-blue-500', 
     return `$${salary}`;
   };
 
-  // 🎨 SAVING STATE CLASSES
   const getSavingClasses = () => {
     if (candidate._saving) {
       return 'saving-candidate';
@@ -60,23 +73,22 @@ const KanbanCard = ({ candidate, isOverlay = false, stageColor = 'bg-blue-500', 
   };
 
   const getCardClasses = () => {
-    let baseClasses = "group relative bg-white rounded-xl shadow-sm border-2 border-gray-200 p-4 transition-all duration-300";
+    let baseClasses = "group relative bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 border-gray-200 dark:border-gray-700 p-4 transition-all duration-300";
     
     if (isMovable) {
-      baseClasses += " cursor-grab active:cursor-grabbing hover:shadow-lg hover:border-gray-300 hover:-translate-y-1";
+      baseClasses += " cursor-grab active:cursor-grabbing hover:shadow-lg dark:hover:shadow-xl hover:border-gray-300 dark:hover:border-gray-600 hover:-translate-y-1";
     } else {
       baseClasses += " opacity-75 cursor-not-allowed";
     }
     
     if (isDragging) {
-      baseClasses += " shadow-xl ring-2 ring-blue-400/50";
+      baseClasses += " shadow-xl dark:shadow-2xl ring-2 ring-blue-400/50 dark:ring-blue-500/50";
     }
     
     if (isOverlay) {
-      baseClasses += " shadow-2xl scale-105 rotate-3";
+      baseClasses += " shadow-2xl dark:shadow-3xl scale-105 rotate-3";
     }
     
-    // 🎨 ADD SAVING CLASSES
     baseClasses += ` ${getSavingClasses()}`;
     
     return baseClasses;
@@ -97,10 +109,10 @@ const KanbanCard = ({ candidate, isOverlay = false, stageColor = 'bg-blue-500', 
             {getInitials(candidateName)}
           </div>
           <div className="ml-3 flex-1 min-w-0">
-            <h4 className="font-semibold text-gray-900 text-sm truncate">
+            <h4 className="font-bold text-gray-900 dark:text-gray-50 text-sm truncate">
               {candidateName}
             </h4>
-            <p className="text-xs text-gray-500 truncate">
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
               {candidateEmail}
             </p>
           </div>
@@ -110,36 +122,52 @@ const KanbanCard = ({ candidate, isOverlay = false, stageColor = 'bg-blue-500', 
         <div className="flex items-center space-x-2">
           {/* Lock Icon for Final Stages */}
           {!isMovable && (
-            <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-              <span className="text-xs">🔒</span>
+            <div className="w-6 h-6 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center flex-shrink-0 border border-gray-200 dark:border-gray-600">
+              <Lock className="w-3 h-3 text-gray-400 dark:text-gray-500" />
             </div>
           )}
           
           {/* Drag Handle */}
           {isMovable && !candidate._saving && (
             <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-              <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M7 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM7 8a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM7 14a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM13 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM13 8a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM13 14a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"></path>
-              </svg>
+              <GripVertical className="w-4 h-4 text-gray-400 dark:text-gray-500" />
             </div>
           )}
         </div>
       </div>
 
+      {/* Job Information */}
+      {jobInfo && (
+        <div className="mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+          <div className="flex items-center space-x-1 text-xs">
+            <Briefcase className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+            <span className="font-medium text-blue-600 dark:text-blue-400 truncate">
+              {jobInfo.title}
+            </span>
+          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {jobInfo.department || jobInfo.company}
+          </div>
+        </div>
+      )}
+
       {/* Key Information */}
       <div className="space-y-2 mb-4">
         <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center text-gray-600">
-            <span className="mr-1">💼</span>
-            <span>{candidateExperience}y exp</span>
+          <div className="flex items-center text-gray-600 dark:text-gray-400 space-x-1">
+            <span className="w-4 h-4 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
+              <span className="text-xs font-bold">{candidateExperience}</span>
+            </span>
+            <span>years exp</span>
           </div>
-          <div className="font-semibold text-gray-900">
-            {formatSalary(candidateSalary)}
+          <div className="flex items-center space-x-1 font-bold text-gray-900 dark:text-gray-50">
+            <DollarSign className="w-3 h-3" />
+            <span>{formatSalary(candidateSalary)}</span>
           </div>
         </div>
         
-        <div className="flex items-center text-xs text-gray-600">
-          <span className="mr-1">📍</span>
+        <div className="flex items-center text-xs text-gray-600 dark:text-gray-400 space-x-1">
+          <MapPin className="w-3 h-3" />
           <span className="truncate">{candidateLocation.split(',')[0]}</span>
         </div>
       </div>
@@ -151,13 +179,13 @@ const KanbanCard = ({ candidate, isOverlay = false, stageColor = 'bg-blue-500', 
             {candidateSkills.slice(0, 3).map((skill, index) => (
               <span 
                 key={index} 
-                className={`px-2 py-1 ${lightColor} text-xs font-medium rounded-md border border-gray-200/50`}
+                className={`px-2 py-1 ${lightColor} text-xs font-medium rounded-md border border-gray-200/50 dark:border-gray-600/50 text-gray-700 dark:text-gray-300`}
               >
                 {skill}
               </span>
             ))}
             {candidateSkills.length > 3 && (
-              <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-md border border-gray-200">
+              <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs font-medium rounded-md border border-gray-200 dark:border-gray-600">
                 +{candidateSkills.length - 3}
               </span>
             )}
@@ -166,8 +194,8 @@ const KanbanCard = ({ candidate, isOverlay = false, stageColor = 'bg-blue-500', 
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-        <div className="text-xs text-gray-500">
+      <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700">
+        <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">
           {new Date(candidateAppliedDate).toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric'
@@ -176,30 +204,31 @@ const KanbanCard = ({ candidate, isOverlay = false, stageColor = 'bg-blue-500', 
         
         <Link
           to={`/candidates/${candidate.id}`}
-          className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+          className="inline-flex items-center space-x-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
           onClick={(e) => e.stopPropagation()}
         >
-          View →
+          <span>View</span>
+          <ExternalLink className="w-3 h-3" />
         </Link>
       </div>
 
-      {/* 🎨 SAVING INDICATOR */}
+      {/* Saving Indicator */}
       {candidate._saving && (
         <div className="absolute -top-2 -right-2 w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center shadow-lg animate-pulse">
           <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
         </div>
       )}
 
-      {/* 🎉 SUCCESS INDICATOR */}
+      {/* Success Indicator */}
       {candidate._justSaved && (
         <div className="absolute -top-2 -right-2 w-7 h-7 bg-green-500 rounded-full flex items-center justify-center shadow-lg animate-bounce">
           <span className="text-white text-sm font-bold">✓</span>
         </div>
       )}
 
-      {/* 🎨 SAVING OVERLAY */}
+      {/* Saving Overlay */}
       {candidate._saving && (
-        <div className="absolute inset-0 bg-blue-50/80 rounded-xl flex items-center justify-center backdrop-blur-[1px]">
+        <div className="absolute inset-0 bg-blue-50/80 dark:bg-blue-900/80 rounded-xl flex items-center justify-center backdrop-blur-[1px]">
           <div className="flex items-center space-x-2 bg-blue-500 text-white px-3 py-1.5 rounded-full shadow-lg">
             <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             <span className="text-xs font-medium">Saving...</span>
@@ -207,9 +236,9 @@ const KanbanCard = ({ candidate, isOverlay = false, stageColor = 'bg-blue-500', 
         </div>
       )}
 
-      {/* 🎉 SUCCESS FLASH */}
+      {/* Success Flash */}
       {candidate._justSaved && (
-        <div className="absolute inset-0 bg-green-50/80 rounded-xl flex items-center justify-center backdrop-blur-[1px] animate-pulse">
+        <div className="absolute inset-0 bg-green-50/80 dark:bg-green-900/80 rounded-xl flex items-center justify-center backdrop-blur-[1px] animate-pulse">
           <div className="flex items-center space-x-2 bg-green-500 text-white px-3 py-1.5 rounded-full shadow-lg">
             <span className="text-sm">✓</span>
             <span className="text-xs font-medium">Saved!</span>

@@ -1,14 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { ChevronLeft, ChevronRight, MoreHorizontal, CheckCircle, XCircle } from 'lucide-react';
+import { useTheme } from '../../../contexts/ThemeContext';
 import KanbanCard from './KanbanCard';
 
 const KanbanColumn = ({ 
   stage, 
   candidates = [], 
   isValidDropTarget = true, 
-  isDragActive = false 
+  isDragActive = false,
+  jobs = [],
+  getJobInfo
 }) => {
+  const { isDark } = useTheme();
   const [currentPage, setCurrentPage] = useState(1);
   const CARDS_PER_PAGE = 5;
 
@@ -20,7 +25,7 @@ const KanbanColumn = ({
     candidates.filter(candidate => candidate && candidate.id) : 
     [];
 
-  // 📊 PAGINATION CALCULATIONS
+  // Pagination calculations
   const totalCandidates = safeCandidates.length;
   const totalPages = Math.ceil(totalCandidates / CARDS_PER_PAGE);
   const startIndex = (currentPage - 1) * CARDS_PER_PAGE;
@@ -30,7 +35,7 @@ const KanbanColumn = ({
   const hasNextPage = currentPage < totalPages;
   const hasPrevPage = currentPage > 1;
 
-  // 📄 PAGE NAVIGATION
+  // Page navigation
   const goToNextPage = () => {
     if (hasNextPage) {
       setCurrentPage(prev => prev + 1);
@@ -55,19 +60,27 @@ const KanbanColumn = ({
   }, [candidates.length]);
 
   const getColumnClasses = () => {
-    let baseClasses = "flex flex-col w-80 bg-white rounded-2xl transition-all duration-300 border shadow-sm";
+    let baseClasses = "flex flex-col w-80 bg-white dark:bg-gray-800 rounded-2xl transition-all duration-300 border shadow-sm";
     
     if (isDragActive) {
       if (isValidDropTarget) {
-        baseClasses += " border-green-300 bg-green-50/30 shadow-lg ring-2 ring-green-200/50 scale-[1.02]";
+        baseClasses += " border-green-300 dark:border-green-600 bg-green-50/30 dark:bg-green-900/20 shadow-lg ring-2 ring-green-200/50 dark:ring-green-500/30 scale-[1.02]";
       } else {
-        baseClasses += " border-red-300 bg-red-50/30 opacity-60 scale-[0.98]";
+        baseClasses += " border-red-300 dark:border-red-600 bg-red-50/30 dark:bg-red-900/20 opacity-60 scale-[0.98]";
       }
     } else {
-      baseClasses += ` ${stage.borderColor} hover:shadow-md hover:scale-[1.01]`;
+      baseClasses += ` border-gray-200 dark:border-gray-700 hover:shadow-md dark:hover:shadow-xl hover:scale-[1.01]`;
     }
     
     return baseClasses;
+  };
+
+  const getHeaderClasses = () => {
+    return `px-5 py-4 ${stage.lightColor} border-b border-gray-200 dark:border-gray-700 rounded-t-2xl`;
+  };
+
+  const getFooterClasses = () => {
+    return `px-4 py-3 ${stage.lightColor} border-t border-gray-200 dark:border-gray-700 rounded-b-2xl`;
   };
 
   return (
@@ -75,16 +88,17 @@ const KanbanColumn = ({
       ref={setNodeRef}
       className={getColumnClasses()}
     >
-      {/* Modern Header */}
-      <div className={`px-5 py-4 ${stage.lightColor} border-b ${stage.borderColor} rounded-t-2xl`}>
+      
+      {/* Enhanced Header */}
+      <div className={getHeaderClasses()}>
         <div className="flex items-center justify-between">
           <div className="flex items-center">
-            <div className={`w-9 h-9 ${stage.color} rounded-xl flex items-center justify-center text-white text-sm mr-3 shadow-sm`}>
+            <div className={`w-9 h-9 bg-gradient-to-r ${stage.gradient || stage.color} rounded-xl flex items-center justify-center text-white text-sm mr-3 shadow-md`}>
               {stage.icon}
             </div>
             <div>
-              <h3 className={`font-bold text-gray-900 text-base`}>{stage.label}</h3>
-              <p className="text-xs text-gray-500">
+              <h3 className={`font-bold text-gray-900 dark:text-gray-50 text-base`}>{stage.label}</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 {totalCandidates > 0 
                   ? `${startIndex + 1}-${Math.min(endIndex, totalCandidates)} of ${totalCandidates}`
                   : '0 candidates'
@@ -93,22 +107,22 @@ const KanbanColumn = ({
             </div>
           </div>
           
-          {/* Count Badge */}
+          {/* Count Badge and Drop Indicator */}
           <div className="flex items-center space-x-2">
-            <div className={`px-3 py-1.5 ${stage.color} text-white rounded-lg text-sm font-bold shadow-sm`}>
+            <div className={`px-3 py-1.5 bg-gradient-to-r ${stage.gradient || stage.color} text-white rounded-lg text-sm font-bold shadow-md`}>
               {totalCandidates}
             </div>
             
-            {/* Drop Indicator */}
+            {/* Enhanced Drop Indicator */}
             {isDragActive && (
               <div className="animate-pulse">
                 {isValidDropTarget ? (
-                  <div className="w-7 h-7 bg-green-500 rounded-full flex items-center justify-center shadow-md">
-                    <span className="text-white text-sm">✓</span>
+                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
+                    <CheckCircle className="w-4 h-4 text-white" />
                   </div>
                 ) : (
-                  <div className="w-7 h-7 bg-red-500 rounded-full flex items-center justify-center shadow-md">
-                    <span className="text-white text-sm">✕</span>
+                  <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center shadow-lg">
+                    <XCircle className="w-4 h-4 text-white" />
                   </div>
                 )}
               </div>
@@ -117,38 +131,44 @@ const KanbanColumn = ({
         </div>
       </div>
 
-      {/* Cards Container - Fixed Height */}
+      {/* Cards Container - Fixed Height with Better Scrolling */}
       <div className="flex-1 p-4 space-y-3 h-[400px] overflow-hidden">
         {totalCandidates > 0 ? (
           <>
-            {/* Cards */}
+            {/* Cards with Fade-in Animation */}
             <SortableContext items={visibleCandidates.map(c => c.id)} strategy={verticalListSortingStrategy}>
-              {visibleCandidates.map((candidate, index) => (
-                <div
-                  key={candidate.id}
-                  className="animate-fadeIn"
-                  style={{
-                    animationDelay: `${index * 50}ms`,
-                    animationFillMode: 'both'
-                  }}
-                >
-                  <KanbanCard 
-                    candidate={candidate} 
-                    stageColor={stage.color}
-                    lightColor={stage.lightColor}
-                  />
-                </div>
-              ))}
+              <div className="space-y-3">
+                {visibleCandidates.map((candidate, index) => (
+                  <div
+                    key={candidate.id}
+                    className="animate-fadeIn"
+                    style={{
+                      animationDelay: `${index * 50}ms`,
+                      animationFillMode: 'both'
+                    }}
+                  >
+                    <KanbanCard 
+                      candidate={candidate} 
+                      stageColor={stage.color}
+                      lightColor={stage.lightColor}
+                      jobs={jobs}
+                      getJobInfo={getJobInfo}
+                    />
+                  </div>
+                ))}
+              </div>
             </SortableContext>
           </>
         ) : (
-          /* Empty State */
+          /* Enhanced Empty State */
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className={`w-20 h-20 ${stage.lightColor} rounded-3xl flex items-center justify-center mb-4 border-2 border-dashed ${stage.borderColor}`}>
+            <div className={`w-20 h-20 ${stage.lightColor} rounded-3xl flex items-center justify-center mb-4 border-2 border-dashed border-gray-300 dark:border-gray-600`}>
               <span className={`text-3xl opacity-40`}>{stage.icon}</span>
             </div>
-            <p className="text-sm font-medium text-gray-500 mb-2">No candidates in {stage.label.toLowerCase()}</p>
-            <p className="text-xs text-gray-400 text-center leading-relaxed max-w-32">
+            <p className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-2">
+              No candidates in {stage.label.toLowerCase()}
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 text-center leading-relaxed max-w-32">
               {isDragActive && isValidDropTarget 
                 ? "Drop candidates here" 
                 : "Candidates will appear here when they reach this stage"
@@ -158,33 +178,33 @@ const KanbanColumn = ({
         )}
       </div>
 
-      {/* 📄 PAGINATION FOOTER (Only show if more than 5 candidates) */}
+      {/* Enhanced Pagination Footer */}
       {totalCandidates > CARDS_PER_PAGE && (
-        <div className={`px-4 py-3 ${stage.lightColor} border-t ${stage.borderColor} rounded-b-2xl`}>
+        <div className={getFooterClasses()}>
           <div className="flex items-center justify-between">
-            {/* Page Info */}
-            <div className="text-xs text-gray-600">
+            
+            {/* Enhanced Page Info */}
+            <div className="text-xs font-medium text-gray-600 dark:text-gray-400">
               Page {currentPage} of {totalPages}
             </div>
 
-            {/* Navigation Controls */}
+            {/* Enhanced Navigation Controls */}
             <div className="flex items-center space-x-1">
+              
               {/* Previous Button */}
               <button
                 onClick={goToPrevPage}
                 disabled={!hasPrevPage}
-                className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all transform hover:scale-105 ${
                   hasPrevPage 
-                    ? `${stage.color} text-white hover:opacity-80` 
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    ? `bg-gradient-to-r ${stage.gradient || stage.color} text-white hover:shadow-md shadow-sm` 
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                 }`}
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
+                <ChevronLeft className="w-4 h-4" />
               </button>
 
-              {/* Page Numbers (show up to 3 pages) */}
+              {/* Enhanced Page Numbers */}
               <div className="flex space-x-1">
                 {Array.from({ length: Math.min(totalPages, 3) }, (_, i) => {
                   let pageNum;
@@ -204,10 +224,10 @@ const KanbanColumn = ({
                     <button
                       key={pageNum}
                       onClick={() => goToPage(pageNum)}
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-medium transition-colors ${
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all transform hover:scale-105 ${
                         pageNum === currentPage
-                          ? `${stage.color} text-white`
-                          : `text-gray-600 hover:${stage.lightColor}`
+                          ? `bg-gradient-to-r ${stage.gradient || stage.color} text-white shadow-md`
+                          : `text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700`
                       }`}
                     >
                       {pageNum}
@@ -216,30 +236,35 @@ const KanbanColumn = ({
                 })}
               </div>
 
+              {/* Show more pages indicator */}
+              {totalPages > 3 && currentPage < totalPages - 1 && (
+                <div className="flex items-center justify-center w-8 h-8">
+                  <MoreHorizontal className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                </div>
+              )}
+
               {/* Next Button */}
               <button
                 onClick={goToNextPage}
                 disabled={!hasNextPage}
-                className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all transform hover:scale-105 ${
                   hasNextPage 
-                    ? `${stage.color} text-white hover:opacity-80` 
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    ? `bg-gradient-to-r ${stage.gradient || stage.color} text-white hover:shadow-md shadow-sm` 
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                 }`}
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Quick Jump (for columns with many candidates) */}
+          {/* Enhanced Quick Jump for Many Pages */}
           {totalPages > 5 && (
-            <div className="mt-2 flex items-center justify-center">
+            <div className="mt-3 flex items-center justify-center">
               <select
                 value={currentPage}
                 onChange={(e) => goToPage(parseInt(e.target.value))}
-                className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 text-gray-900 dark:text-gray-100 font-medium"
               >
                 {Array.from({ length: totalPages }, (_, i) => (
                   <option key={i + 1} value={i + 1}>
@@ -251,6 +276,23 @@ const KanbanColumn = ({
           )}
         </div>
       )}
+
+      {/* Custom Animation Styles */}
+      <style jsx>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out forwards;
+        }
+      `}</style>
     </div>
   );
 };

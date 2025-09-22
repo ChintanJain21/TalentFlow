@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Grid3X3, ArrowUpDown, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Grid3X3, ArrowUpDown, AlertCircle, ChevronLeft, ChevronRight, Briefcase, Target, Archive } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import { useTheme } from '../../../contexts/ThemeContext';
 import Modal from '../../../components/ui/Modal';
 import JobForm from './JobForm';
 import SortableJobCard from './SortableJobCard';
 import RegularJobCard from './JobCard';
 
 const JobsBoard = () => {
+  const { isDark } = useTheme();
+  
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [reorderMode, setReorderMode] = useState(false);
@@ -32,7 +35,7 @@ const JobsBoard = () => {
     setTimeout(() => setNotification(null), type === 'error' ? 5000 : 3000);
   };
 
-  // ✅ SIMPLIFIED fetchJobs - For initial load and search only
+  // Simplified fetchJobs
   const fetchJobs = async (page = 1, search = '', status = '', pageSize = 12) => {
     setLoading(true);
     try {
@@ -189,49 +192,50 @@ const JobsBoard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
+        
+        {/* Enhanced Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-transparent">
+              <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-50 mb-2">
                 Jobs Board
               </h1>
-              <p className="text-slate-600 mt-2 flex items-center space-x-4">
-                <span>Manage your job postings</span>
-                <span className="w-1 h-1 bg-slate-400 rounded-full"></span>
-                <span className="flex items-center space-x-1">
-                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                  <span>{stats.active} active</span>
-                </span>
-                <span className="flex items-center space-x-1">
-                  <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
-                  <span>{stats.archived} archived</span>
-                </span>
-              </p>
+              <div className="flex items-center space-x-4 text-gray-600 dark:text-gray-300">
+                <span className="font-medium">Manage your job postings</span>
+                <div className="w-1 h-1 bg-gray-400 dark:bg-gray-500 rounded-full"></div>
+                <div className="flex items-center space-x-1">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="font-bold">{stats.active} active</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <div className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full"></div>
+                  <span className="font-bold">{stats.archived} archived</span>
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => setReorderMode(!reorderMode)}
-                className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
+                className={`px-5 py-3 rounded-xl font-bold transition-all duration-200 flex items-center space-x-2 border-2 ${
                   reorderMode
-                    ? 'bg-orange-500 text-white shadow-lg shadow-orange-200 hover:bg-orange-600'
-                    : 'bg-white text-slate-700 shadow-sm border border-slate-200 hover:shadow-md hover:border-slate-300'
+                    ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-500 shadow-lg'
+                    : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm hover:shadow-md'
                 }`}
               >
                 <ArrowUpDown size={18} />
-                <span>{reorderMode ? 'Exit Reorder' : 'Reorder'}</span>
+                <span>{reorderMode ? 'Exit Reorder' : 'Reorder Jobs'}</span>
               </button>
 
               <button
                 onClick={() => setShowCreateModal(true)}
                 disabled={reorderMode}
-                className={`px-6 py-2 rounded-xl font-semibold transition-all duration-200 flex items-center space-x-2 ${
+                className={`px-6 py-3 rounded-xl font-bold transition-all duration-200 flex items-center space-x-2 border-2 ${
                   reorderMode
-                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-200 hover:shadow-xl hover:from-blue-700 hover:to-blue-800 transform hover:-translate-y-0.5'
+                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border-gray-300 dark:border-gray-600 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5'
                 }`}
               >
                 <Plus size={20} />
@@ -240,63 +244,63 @@ const JobsBoard = () => {
             </div>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          {/* Enhanced Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border-2 border-gray-200 dark:border-gray-700 hover:shadow-md transition-all">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-600 text-sm font-medium">Total Jobs</p>
-                  <p className="text-3xl font-bold text-slate-900 mt-1">{stats.total}</p>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm font-bold uppercase tracking-wide">Total Jobs</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-gray-50 mt-2">{stats.total}</p>
                 </div>
-                <div className="w-12 h-12 bg-gradient-to-br from-slate-100 to-slate-200 rounded-xl flex items-center justify-center">
-                  <Grid3X3 className="text-slate-600" size={24} />
+                <div className="w-14 h-14 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded-2xl flex items-center justify-center">
+                  <Grid3X3 className="text-gray-600 dark:text-gray-300" size={28} />
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border-2 border-gray-200 dark:border-gray-700 hover:shadow-md transition-all">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-green-600 text-sm font-medium">Active Jobs</p>
-                  <p className="text-3xl font-bold text-green-700 mt-1">{stats.active}</p>
+                  <p className="text-green-600 dark:text-green-400 text-sm font-bold uppercase tracking-wide">Active Jobs</p>
+                  <p className="text-3xl font-bold text-green-700 dark:text-green-300 mt-2">{stats.active}</p>
                 </div>
-                <div className="w-12 h-12 bg-gradient-to-br from-green-100 to-green-200 rounded-xl flex items-center justify-center">
-                  <div className="w-6 h-6 bg-green-500 rounded-lg"></div>
+                <div className="w-14 h-14 bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900 dark:to-green-800 rounded-2xl flex items-center justify-center">
+                  <Target className="text-green-600 dark:text-green-400" size={28} />
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border-2 border-gray-200 dark:border-gray-700 hover:shadow-md transition-all">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-600 text-sm font-medium">Archived Jobs</p>
-                  <p className="text-3xl font-bold text-slate-700 mt-1">{stats.archived}</p>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm font-bold uppercase tracking-wide">Archived Jobs</p>
+                  <p className="text-3xl font-bold text-gray-700 dark:text-gray-300 mt-2">{stats.archived}</p>
                 </div>
-                <div className="w-12 h-12 bg-gradient-to-br from-slate-100 to-slate-200 rounded-xl flex items-center justify-center">
-                  <div className="w-6 h-6 bg-slate-400 rounded-lg"></div>
+                <div className="w-14 h-14 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded-2xl flex items-center justify-center">
+                  <Archive className="text-gray-600 dark:text-gray-300" size={28} />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Filters */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          {/* Enhanced Filters */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border-2 border-gray-200 dark:border-gray-700">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1 relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" size={20} />
                 <input
                   type="text"
                   placeholder="Search jobs by title, department, or skills..."
                   value={filters.search}
                   onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
                 />
               </div>
 
               <select
                 value={filters.status}
                 onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent text-gray-900 dark:text-gray-100 font-medium"
               >
                 <option value="">All Status</option>
                 <option value="active">Active Only</option>
@@ -306,54 +310,54 @@ const JobsBoard = () => {
           </div>
         </div>
 
-        {/* Notifications */}
+        {/* Enhanced Notifications */}
         {notification && (
-          <div className={`fixed top-4 right-4 z-50 max-w-sm mx-auto mb-4 p-4 rounded-xl shadow-lg animate-in slide-in-from-right duration-300 ${
-            notification.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
-            notification.type === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
-            'bg-blue-50 border border-blue-200 text-blue-800'
+          <div className={`fixed top-4 right-4 z-50 max-w-sm mx-auto mb-4 p-4 rounded-xl shadow-xl animate-in slide-in-from-right duration-300 border-2 ${
+            notification.type === 'success' ? 'bg-green-50 dark:bg-green-900/30 border-green-300 dark:border-green-700 text-green-800 dark:text-green-200' :
+            notification.type === 'error' ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-800 dark:text-red-200' :
+            'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200'
           }`}>
             <div className="flex items-center space-x-3">
-              {notification.type === 'success' && <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>}
-              {notification.type === 'error' && <AlertCircle size={16} />}
-              {notification.type === 'info' && <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>}
-              <span className="font-medium">{notification.message}</span>
+              {notification.type === 'success' && <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>}
+              {notification.type === 'error' && <AlertCircle size={18} />}
+              {notification.type === 'info' && <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>}
+              <span className="font-bold">{notification.message}</span>
             </div>
           </div>
         )}
 
-        {/* Reorder Banner */}
+        {/* Enhanced Reorder Banner */}
         {reorderMode && (
-          <div className="mb-6 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-2xl p-6 shadow-lg">
+          <div className="mb-6 bg-gradient-to-r from-orange-500 to-amber-500 dark:from-orange-600 dark:to-amber-600 text-white rounded-2xl p-6 shadow-xl border-2 border-orange-400">
             <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-white bg-opacity-20 rounded-xl flex items-center justify-center">
-                <ArrowUpDown size={24} />
+              <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
+                <ArrowUpDown size={28} />
               </div>
               <div>
-                <h3 className="font-bold text-lg">Reorder Mode Active</h3>
-                <p className="text-orange-100">Drag and drop jobs to reorder them. Changes are saved automatically with 10% simulated failure rate for testing.</p>
+                <h3 className="font-bold text-xl mb-1">Reorder Mode Active</h3>
+                <p className="text-orange-100 font-medium">Drag and drop jobs to reorder them. Changes are saved automatically.</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Loading */}
+        {/* Enhanced Loading */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
-              <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-slate-600 font-medium">Loading jobs...</p>
+              <div className="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-600 dark:text-gray-300 font-bold text-lg">Loading jobs...</p>
             </div>
           </div>
         ) : jobs.length === 0 ? (
           <div className="text-center py-20">
-            <div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl mx-auto mb-6 flex items-center justify-center">
-              <Grid3X3 className="text-slate-400" size={40} />
+            <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 rounded-3xl mx-auto mb-6 flex items-center justify-center">
+              <Briefcase className="text-gray-400 dark:text-gray-500" size={48} />
             </div>
-            <h3 className="text-2xl font-bold text-slate-900 mb-3">
+            <h3 className="text-3xl font-bold text-gray-900 dark:text-gray-50 mb-4">
               {filters.search || filters.status ? 'No jobs found' : 'No jobs yet'}
             </h3>
-            <p className="text-slate-600 mb-8 max-w-md mx-auto">
+            <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-md mx-auto font-medium">
               {filters.search || filters.status 
                 ? 'Try adjusting your search criteria or filters to find what you\'re looking for.' 
                 : 'Get started by creating your first job posting to attract top talent.'
@@ -362,7 +366,7 @@ const JobsBoard = () => {
             {!filters.search && !filters.status && !reorderMode && (
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+                className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 border-2 border-blue-600"
               >
                 Create Your First Job
               </button>
@@ -403,7 +407,7 @@ const JobsBoard = () => {
               </div>
             )}
 
-            {/* ✅ COMPLETELY FIXED PAGINATION WITH DIRECT API CALLS */}
+            {/* Enhanced Pagination */}
             {pagination.totalPages > 1 && !reorderMode && (
               <div className="flex justify-center mt-12">
                 <div className="flex items-center space-x-2">
@@ -449,7 +453,7 @@ const JobsBoard = () => {
                         }
                       }}
                       disabled={loading}
-                      className="w-12 h-12 rounded-xl font-semibold transition-all bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 flex items-center justify-center hover:shadow-md disabled:opacity-50"
+                      className="w-12 h-12 rounded-xl font-bold transition-all bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 flex items-center justify-center hover:shadow-md disabled:opacity-50"
                     >
                       <ChevronLeft size={18} />
                     </button>
@@ -523,10 +527,10 @@ const JobsBoard = () => {
                           }
                         }}
                         disabled={loading}
-                        className={`w-12 h-12 rounded-xl font-semibold transition-all disabled:opacity-50 ${
+                        className={`w-12 h-12 rounded-xl font-bold transition-all disabled:opacity-50 border-2 ${
                           isCurrent
-                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
-                            : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 hover:shadow-md'
+                            ? 'bg-blue-600 dark:bg-blue-500 text-white border-blue-600 dark:border-blue-500 shadow-lg'
+                            : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600 hover:shadow-md'
                         }`}
                       >
                         {pageNum}
@@ -576,7 +580,7 @@ const JobsBoard = () => {
                         }
                       }}
                       disabled={loading}
-                      className="w-12 h-12 rounded-xl font-semibold transition-all bg-white text-slate-700 hover:bg-slate-50 border border-slate-200 flex items-center justify-center hover:shadow-md disabled:opacity-50"
+                      className="w-12 h-12 rounded-xl font-bold transition-all bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 flex items-center justify-center hover:shadow-md disabled:opacity-50"
                     >
                       <ChevronRight size={18} />
                     </button>
@@ -585,19 +589,21 @@ const JobsBoard = () => {
               </div>
             )}
 
-            {/* Page Info */}
+            {/* Enhanced Page Info */}
             {pagination.totalPages > 1 && !reorderMode && (
-              <div className="text-center mt-4">
-                <p className="text-sm text-slate-600">
-                  Showing {((pagination.page - 1) * pagination.pageSize) + 1} to {Math.min(pagination.page * pagination.pageSize, pagination.total)} of {pagination.total} jobs
-                  <span className="ml-2 text-slate-400">• Page {pagination.page} of {pagination.totalPages}</span>
+              <div className="text-center mt-6">
+                <p className="text-gray-600 dark:text-gray-400 font-medium">
+                  Showing <span className="font-bold text-gray-900 dark:text-gray-100">{((pagination.page - 1) * pagination.pageSize) + 1}</span> to <span className="font-bold text-gray-900 dark:text-gray-100">{Math.min(pagination.page * pagination.pageSize, pagination.total)}</span> of <span className="font-bold text-gray-900 dark:text-gray-100">{pagination.total}</span> jobs
+                </p>
+                <p className="text-gray-500 dark:text-gray-500 text-sm mt-1">
+                  Page <span className="font-bold">{pagination.page}</span> of <span className="font-bold">{pagination.totalPages}</span>
                 </p>
               </div>
             )}
           </div>
         )}
 
-        {/* Modals */}
+        {/* Enhanced Modals */}
         <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="Create New Job" size="lg">
           <JobForm onSubmit={handleCreateJob} onCancel={() => setShowCreateModal(false)} isLoading={formLoading} />
         </Modal>

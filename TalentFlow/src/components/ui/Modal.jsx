@@ -1,7 +1,10 @@
 import { X } from 'lucide-react';
 import { useEffect } from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
 
-const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
+const Modal = ({ isOpen, onClose, title, children, size = 'md', showCloseButton = true }) => {
+  const { isDark } = useTheme();
+
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape') onClose();
@@ -24,34 +27,57 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
     sm: 'max-w-md',
     md: 'max-w-lg', 
     lg: 'max-w-2xl',
-    xl: 'max-w-4xl'
+    xl: 'max-w-4xl',
+    full: 'max-w-7xl mx-4'
   };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-screen items-center justify-center p-4">
-        {/* Backdrop */}
+        
+        {/* Strong Backdrop */}
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+          className="fixed inset-0 bg-black/70 dark:bg-black/85 backdrop-blur-sm transition-opacity duration-300"
           onClick={onClose}
         />
         
-        {/* Modal */}
-        <div className={`relative bg-white rounded-lg shadow-xl w-full ${sizeClasses[size]} max-h-[90vh] overflow-hidden`}>
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b">
-            <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X size={24} />
-            </button>
+        {/* Modal with Maximum Contrast */}
+        <div className={`
+          relative w-full ${sizeClasses[size]} 
+          transform transition-all duration-300 
+          bg-white dark:bg-gray-900 
+          rounded-2xl shadow-2xl 
+          max-h-[90vh] overflow-hidden
+          border-2 border-gray-400 dark:border-gray-500
+        `}>
+          
+          {/* Header - Strong Contrast */}
+          <div className="flex items-center justify-between p-6 border-b-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800">
+            <div className="flex items-center space-x-3">
+              <div className="w-1 h-8 bg-gradient-to-b from-blue-600 to-purple-600 rounded-full"></div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-50">
+                {title}
+              </h2>
+            </div>
+            
+            {showCloseButton && (
+              <button
+                onClick={onClose}
+                className="group p-2.5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-xl transition-all duration-200 border-2 border-gray-300 dark:border-gray-600"
+                aria-label="Close modal"
+              >
+                <X size={22} className="transform group-hover:rotate-90 transition-transform duration-200" />
+              </button>
+            )}
           </div>
           
-          {/* Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-            {children}
+          {/* Content - Maximum Text Contrast */}
+          <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
+            <div className="p-6 bg-white dark:bg-gray-900">
+              <div className="text-gray-900 dark:text-gray-50">
+                {children}
+              </div>
+            </div>
           </div>
         </div>
       </div>

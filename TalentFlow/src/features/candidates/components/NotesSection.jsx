@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
+import { Send, AtSign, Users, MessageSquare, Plus, Clock, User } from 'lucide-react';
+import { useTheme } from '../../../contexts/ThemeContext';
 
 const NotesSection = ({ candidate, setCandidate, currentStage, formatFullDate }) => {
+  const { isDark } = useTheme();
   const [newNote, setNewNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
@@ -10,11 +13,11 @@ const NotesSection = ({ candidate, setCandidate, currentStage, formatFullDate })
 
   // Mock users for @mentions (replace with actual user data)
   const availableUsers = [
-    { id: 1, name: 'Sarah Johnson', email: 'sarah@company.com', role: 'HR Manager' },
-    { id: 2, name: 'Mike Chen', email: 'mike@company.com', role: 'Tech Lead' },
-    { id: 3, name: 'Emily Davis', email: 'emily@company.com', role: 'Recruiter' },
-    { id: 4, name: 'John Smith', email: 'john@company.com', role: 'Engineering Manager' },
-    { id: 5, name: 'Lisa Wong', email: 'lisa@company.com', role: 'Product Manager' }
+    { id: 1, name: 'Sarah Johnson', email: 'sarah@company.com', role: 'HR Manager', avatar: 'SJ' },
+    { id: 2, name: 'Mike Chen', email: 'mike@company.com', role: 'Tech Lead', avatar: 'MC' },
+    { id: 3, name: 'Emily Davis', email: 'emily@company.com', role: 'Recruiter', avatar: 'ED' },
+    { id: 4, name: 'John Smith', email: 'john@company.com', role: 'Engineering Manager', avatar: 'JS' },
+    { id: 5, name: 'Lisa Wong', email: 'lisa@company.com', role: 'Product Manager', avatar: 'LW' }
   ];
 
   // Filter users based on mention query
@@ -72,6 +75,7 @@ const NotesSection = ({ candidate, setCandidate, currentStage, formatFullDate })
         setShowMentions(false);
         e.preventDefault();
       }
+      // Could add arrow key navigation here
     }
   };
 
@@ -133,7 +137,7 @@ const NotesSection = ({ candidate, setCandidate, currentStage, formatFullDate })
       const mentionRegex = new RegExp(`@${user.name}`, 'g');
       renderedContent = renderedContent.replace(
         mentionRegex, 
-        `<span class="bg-blue-100 text-blue-800 px-1 rounded font-medium">@${user.name}</span>`
+        `<span class="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-md font-medium border border-blue-200 dark:border-blue-700">@${user.name}</span>`
       );
     });
     
@@ -142,9 +146,16 @@ const NotesSection = ({ candidate, setCandidate, currentStage, formatFullDate })
 
   return (
     <div className="space-y-6">
-      {/* Add Note */}
-      <div className="bg-white rounded-3xl shadow-xl p-6">
-        <h3 className="text-xl font-bold text-gray-900 mb-4">✍️ Add Note</h3>
+      
+      {/* Enhanced Add Note Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-200 dark:border-gray-700 transition-colors">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+            <MessageSquare className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-gray-50">Add Note</h3>
+        </div>
+        
         <div className="space-y-4 relative">
           <div className="relative">
             <textarea
@@ -153,24 +164,24 @@ const NotesSection = ({ candidate, setCandidate, currentStage, formatFullDate })
               onChange={handleTextChange}
               onKeyDown={handleKeyDown}
               placeholder="Write a note about this candidate... Use @name to mention team members"
-              className="w-full h-32 px-4 py-3 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              className="w-full h-32 px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent resize-none transition-all text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
             />
             
-            {/* Mentions Dropdown */}
+            {/* Enhanced Mentions Dropdown */}
             {showMentions && filteredUsers.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-10 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto mt-1">
+              <div className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-48 overflow-y-auto mt-1">
                 {filteredUsers.map((user, index) => (
                   <button
                     key={user.id}
                     onClick={() => selectMention(user)}
-                    className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center space-x-3 border-b border-gray-100 last:border-b-0"
+                    className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0 transition-colors"
                   >
                     <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                      {user.name.split(' ').map(n => n[0]).join('')}
+                      {user.avatar}
                     </div>
                     <div>
-                      <div className="font-medium text-gray-900">{user.name}</div>
-                      <div className="text-xs text-gray-500">{user.role}</div>
+                      <div className="font-bold text-gray-900 dark:text-gray-50">{user.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{user.role}</div>
                     </div>
                   </button>
                 ))}
@@ -179,13 +190,14 @@ const NotesSection = ({ candidate, setCandidate, currentStage, formatFullDate })
           </div>
           
           <div className="flex items-center justify-between">
-            <div className="text-xs text-gray-500">
-              💡 Use @name to mention team members
+            <div className="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
+              <AtSign className="w-4 h-4" />
+              <span>Use @name to mention team members</span>
             </div>
             <button
               onClick={addNote}
               disabled={!newNote.trim() || addingNote}
-              className={`px-6 py-3 bg-gradient-to-r ${currentStage.color} text-white rounded-2xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center space-x-2`}
+              className={`flex items-center space-x-2 px-6 py-3 bg-gradient-to-r ${currentStage.gradient || currentStage.color} text-white rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed font-bold transform hover:scale-105`}
             >
               {addingNote ? (
                 <>
@@ -194,7 +206,7 @@ const NotesSection = ({ candidate, setCandidate, currentStage, formatFullDate })
                 </>
               ) : (
                 <>
-                  <span>🚀</span>
+                  <Send className="w-4 h-4" />
                   <span>Add Note</span>
                 </>
               )}
@@ -203,53 +215,77 @@ const NotesSection = ({ candidate, setCandidate, currentStage, formatFullDate })
         </div>
       </div>
 
-      {/* Notes List */}
-      <div className="bg-white rounded-3xl shadow-xl p-6">
-        <h3 className="text-xl font-bold text-gray-900 mb-6">💭 Notes History</h3>
+      {/* Enhanced Notes List */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-200 dark:border-gray-700 transition-colors">
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
+            <MessageSquare className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-gray-50">Notes History</h3>
+          {candidate.notes?.length > 0 && (
+            <span className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full text-sm font-medium">
+              {candidate.notes.length}
+            </span>
+          )}
+        </div>
+        
         {candidate.notes?.length > 0 ? (
           <div className="space-y-4">
-            {candidate.notes.map((note) => (
-              <div key={note.id} className="p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-2xl">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+            {candidate.notes.map((note, index) => (
+              <div 
+                key={note.id} 
+                className="p-5 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/10 dark:to-orange-900/10 border-l-4 border-yellow-400 dark:border-yellow-500 rounded-r-xl border border-yellow-200 dark:border-yellow-800 hover:shadow-md transition-all"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-md">
                       {note.author.split(' ').map(n => n[0]).join('')}
                     </div>
                     <div>
-                      <div className="font-medium text-gray-900">{note.author}</div>
-                      <div className="text-xs text-gray-500">{formatFullDate(note.timestamp)}</div>
+                      <div className="font-bold text-gray-900 dark:text-gray-50">{note.author}</div>
+                      <div className="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
+                        <Clock className="w-3 h-3" />
+                        <span>{formatFullDate(note.timestamp)}</span>
+                      </div>
                     </div>
                   </div>
                   
-                  {/* Note type indicator */}
+                  {/* Enhanced Note Indicators */}
                   <div className="flex items-center space-x-2">
                     {note.mentions?.length > 0 && (
-                      <div className="flex items-center space-x-1">
-                        <span className="text-blue-600 text-xs">👥</span>
-                        <span className="text-xs text-blue-600">{note.mentions.length}</span>
+                      <div className="flex items-center space-x-1 bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-lg border border-blue-200 dark:border-blue-700">
+                        <Users className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{note.mentions.length}</span>
                       </div>
                     )}
-                    <span className="text-xs text-gray-400">📝</span>
+                    <div className="w-6 h-6 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                      <MessageSquare className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+                    </div>
                   </div>
                 </div>
                 
-                <div className="text-gray-900 mb-2">
+                <div className="text-gray-900 dark:text-gray-100 mb-3 leading-relaxed">
                   {renderNoteContent(note.content, note.mentions)}
                 </div>
                 
-                {/* Show mentions */}
+                {/* Enhanced Mentions Display */}
                 {note.mentions?.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-yellow-200">
-                    <div className="text-xs text-gray-600 mb-2">Mentioned:</div>
+                  <div className="mt-4 pt-4 border-t border-yellow-200 dark:border-yellow-700">
+                    <div className="flex items-center space-x-2 text-xs text-gray-600 dark:text-gray-400 mb-3">
+                      <Users className="w-3 h-3" />
+                      <span className="font-bold">Mentioned team members:</span>
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       {note.mentions.map((user, index) => (
-                        <span 
+                        <div 
                           key={index}
-                          className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium"
+                          className="inline-flex items-center space-x-2 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-lg text-xs font-bold border border-blue-200 dark:border-blue-700"
                         >
-                          <span className="mr-1">@</span>
-                          {user.name}
-                        </span>
+                          <div className="w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs">
+                            @
+                          </div>
+                          <span>{user.name}</span>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -258,10 +294,20 @@ const NotesSection = ({ candidate, setCandidate, currentStage, formatFullDate })
             ))}
           </div>
         ) : (
-          <div className="text-center py-12 text-gray-500">
-            <div className="text-4xl mb-4">📝</div>
-            <p className="text-lg font-medium mb-2">No notes yet</p>
-            <p className="text-sm">Add the first note to start tracking this candidate's progress!</p>
+          /* Enhanced Empty State */
+          <div className="text-center py-12">
+            <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-2xl mx-auto mb-4 flex items-center justify-center">
+              <MessageSquare className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+            </div>
+            <h4 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-2">No notes yet</h4>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Add the first note to start tracking this candidate's progress!</p>
+            <button
+              onClick={() => textareaRef.current?.focus()}
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add First Note</span>
+            </button>
           </div>
         )}
       </div>

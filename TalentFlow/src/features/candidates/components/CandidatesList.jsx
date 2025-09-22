@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useSearchParams, Link } from 'react-router-dom'; // Add Link import
+import { useSearchParams, Link } from 'react-router-dom';
+import { List, LayoutGrid, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useTheme } from '../../../contexts/ThemeContext';
 import CandidateFilters from './CandidateFilters';
 import CandidateRow from './CandidateRow';
 import KanbanBoard from './KanbanBoard';
@@ -30,41 +32,91 @@ const getValidDropTargets = (candidateStage) => {
 };
 
 const CandidatesList = () => {
-  const [searchParams] = useSearchParams(); // Add URL params support
+  const { isDark } = useTheme();
+  const [searchParams] = useSearchParams();
   
   // Core state
   const [candidates, setCandidates] = useState([]);
-  const [jobs, setJobs] = useState([]); // ✅ NEW: Jobs state
+  const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState('list');
   const [activeCandidate, setActiveCandidate] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, pageSize: 50, total: 0, totalPages: 0 });
   const [allCandidates, setAllCandidates] = useState([]);
   
-  // Filters - ✅ ENHANCED: Support URL params
+  // Filters - Enhanced URL params support
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [stageFilter, setStageFilter] = useState(searchParams.get('stage') || 'all');
   const [jobFilter, setJobFilter] = useState(searchParams.get('jobId') || 'all');
   
-  // Saving animation state (keep existing)
+  // Saving animation state
   const [savingCandidate, setSavingCandidate] = useState(null);
   const [savedCandidate, setSavedCandidate] = useState(null);
   
-  // Auto-scroll refs (keep existing)
+  // Auto-scroll refs
   const dragTimeoutRef = useRef(null);
   const scrollContainerRef = useRef(null);
 
   const stages = [
-    { value: 'all', label: 'All Stages', count: 0 },
-    { value: 'applied', label: 'Applied', count: 0, icon: '🎯', color: 'bg-slate-100 text-slate-700' },
-    { value: 'screen', label: 'Screening', count: 0, icon: '👋', color: 'bg-yellow-100 text-yellow-700' },
-    { value: 'tech', label: 'Technical', count: 0, icon: '⚡', color: 'bg-purple-100 text-purple-700' },
-    { value: 'offer', label: 'Offer', count: 0, icon: '🎉', color: 'bg-green-100 text-green-700' },
-    { value: 'hired', label: 'Hired', count: 0, icon: '🚀', color: 'bg-blue-100 text-blue-700' },
-    { value: 'rejected', label: 'Rejected', count: 0, icon: '💔', color: 'bg-red-100 text-red-700' }
+    { 
+      value: 'all', 
+      label: 'All Stages', 
+      count: 0, 
+      icon: '📊',
+      color: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
+      border: 'border-gray-200 dark:border-gray-600'
+    },
+    { 
+      value: 'applied', 
+      label: 'Applied', 
+      count: 0, 
+      icon: '🎯', 
+      color: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
+      border: 'border-gray-200 dark:border-gray-600'
+    },
+    { 
+      value: 'screen', 
+      label: 'Screening', 
+      count: 0, 
+      icon: '👋', 
+      color: 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300',
+      border: 'border-yellow-200 dark:border-yellow-700'
+    },
+    { 
+      value: 'tech', 
+      label: 'Technical', 
+      count: 0, 
+      icon: '⚡', 
+      color: 'bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300',
+      border: 'border-purple-200 dark:border-purple-700'
+    },
+    { 
+      value: 'offer', 
+      label: 'Offer', 
+      count: 0, 
+      icon: '🎉', 
+      color: 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300',
+      border: 'border-green-200 dark:border-green-700'
+    },
+    { 
+      value: 'hired', 
+      label: 'Hired', 
+      count: 0, 
+      icon: '🚀', 
+      color: 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300',
+      border: 'border-blue-200 dark:border-blue-700'
+    },
+    { 
+      value: 'rejected', 
+      label: 'Rejected', 
+      count: 0, 
+      icon: '💔', 
+      color: 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300',
+      border: 'border-red-200 dark:border-red-700'
+    }
   ];
 
-  // ✅ HELPER FUNCTIONS FOR JOB INFO
+  // Helper functions for job info
   const getJobInfo = (jobId) => {
     const job = jobs.find(j => j.id === jobId);
     return job || { title: 'Unknown Job', department: 'Unknown', location: 'Unknown' };
@@ -76,7 +128,7 @@ const CandidatesList = () => {
     return job.title;
   };
 
-  // Stats calculation (keep existing)
+  // Stats calculation
   const stageStats = useMemo(() => {
     if (!allCandidates?.length) {
       return { all: 0, applied: 0, screen: 0, tech: 0, offer: 0, hired: 0, rejected: 0 };
@@ -92,7 +144,7 @@ const CandidatesList = () => {
 
   const stagesWithCounts = stages.map(stage => ({ ...stage, count: stageStats[stage.value] || 0 }));
 
-  // Kanban data (keep existing)
+  // Kanban data
   const candidatesByStage = useMemo(() => {
     const emptyStructure = { applied: [], screen: [], tech: [], offer: [], hired: [], rejected: [] };
     if (!allCandidates?.length) return emptyStructure;
@@ -116,7 +168,7 @@ const CandidatesList = () => {
     return stageGroups;
   }, [allCandidates, search]);
 
-  // Auto-scroll during drag (keep existing)
+  // Auto-scroll during drag
   const handleAutoScroll = (clientX) => {
     if (!scrollContainerRef.current) return;
     const container = scrollContainerRef.current;
@@ -146,12 +198,10 @@ const CandidatesList = () => {
     }
   };
 
-  // ✅ ENHANCED API CALLS
+  // API calls
   const fetchAllCandidatesForStats = async () => {
     try {
       let url = '/api/candidates?page=1&pageSize=2000';
-      
-      // ✅ Apply filters to stats
       if (jobFilter !== 'all') url += `&jobId=${jobFilter}`;
       
       const response = await fetch(url);
@@ -164,7 +214,6 @@ const CandidatesList = () => {
     }
   };
 
-  // ✅ FETCH JOBS
   const fetchJobs = async () => {
     try {
       const response = await fetch('/api/jobs?pageSize=100');
@@ -202,7 +251,7 @@ const CandidatesList = () => {
     }
   };
 
-  // Drag handlers (keep existing)
+  // Drag handlers (keep existing logic)
   const handleDragStart = (event) => {
     if (!event?.active?.id || !allCandidates) return;
     const candidate = allCandidates.find(c => c.id === event.active.id);
@@ -313,14 +362,14 @@ const CandidatesList = () => {
     }
   };
 
-  // ✅ ENHANCED EFFECTS
+  // Effects
   useEffect(() => {
-    fetchJobs(); // Fetch jobs on mount
+    fetchJobs();
     fetchAllCandidatesForStats();
   }, []);
 
   useEffect(() => {
-    fetchAllCandidatesForStats(); // Refetch when job filter changes
+    fetchAllCandidatesForStats();
   }, [jobFilter]);
 
   useEffect(() => {
@@ -338,40 +387,44 @@ const CandidatesList = () => {
   const filteredJobTitle = getFilteredJobTitle();
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* ✅ ENHANCED HEADER */}
+    <div className="max-w-7xl mx-auto px-4 py-8 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
+      
+      {/* Enhanced Header */}
       <div className="mb-8 flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Candidates</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-50 mb-2">Candidates</h1>
           {filteredJobTitle ? (
-            <p className="text-gray-600">
-              Showing candidates for <span className="font-semibold text-blue-600">{filteredJobTitle}</span> ({stageStats.all} total)
+            <p className="text-gray-600 dark:text-gray-400">
+              Showing candidates for <span className="font-bold text-blue-600 dark:text-blue-400">{filteredJobTitle}</span> ({stageStats.all} total)
             </p>
           ) : (
-            <p className="text-gray-600">Manage candidate applications ({stageStats.all} total)</p>
+            <p className="text-gray-600 dark:text-gray-400">Manage candidate applications ({stageStats.all} total)</p>
           )}
         </div>
         
-        {/* View Toggle */}
-        <div className="flex bg-gray-100 rounded-lg p-1">
+        {/* Enhanced View Toggle */}
+        <div className="flex bg-white dark:bg-gray-800 rounded-xl p-1 shadow-sm border border-gray-200 dark:border-gray-700">
           {[
-            { mode: 'list', label: '📋 List' },
-            { mode: 'kanban', label: '🎯 Kanban' }
-          ].map(({ mode, label }) => (
+            { mode: 'list', label: 'List', icon: List },
+            { mode: 'kanban', label: 'Kanban', icon: LayoutGrid }
+          ].map(({ mode, label, icon: Icon }) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === mode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                viewMode === mode 
+                  ? 'bg-blue-600 text-white shadow-sm' 
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
               }`}
             >
-              {label}
+              <Icon size={16} />
+              <span>{label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* ✅ ENHANCED FILTERS - Pass jobs to CandidateFilters */}
+      {/* Enhanced Filters */}
       <CandidateFilters
         search={search}
         setSearch={setSearch}
@@ -379,25 +432,27 @@ const CandidatesList = () => {
         setStageFilter={setStageFilter}
         jobFilter={jobFilter}
         setJobFilter={setJobFilter}
-        jobs={jobs} // ✅ Pass jobs
+        jobs={jobs}
         stagesWithCounts={stagesWithCounts}
         viewMode={viewMode}
         showStageFilter={viewMode === 'list'}
         totalCandidates={stageStats.all}
       />
 
-      {/* Stats */}
+      {/* Enhanced Stats */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
         {stagesWithCounts.slice(1).map(stage => (
           <div 
             key={stage.value} 
-            className={`bg-white rounded-lg shadow-sm border p-4 text-center cursor-pointer hover:shadow-md transition-shadow ${
-              stageFilter === stage.value && viewMode === 'list' ? 'ring-2 ring-blue-500' : ''
+            className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 p-4 text-center cursor-pointer hover:shadow-md transition-all transform hover:-translate-y-0.5 ${
+              stageFilter === stage.value && viewMode === 'list' 
+                ? `ring-2 ring-blue-500 dark:ring-blue-400 ${stage.border}` 
+                : `border-gray-200 dark:border-gray-700 ${stage.border}`
             }`}
             onClick={() => viewMode === 'list' && setStageFilter(stage.value)}
           >
-            <div className="text-2xl font-bold text-gray-900">{stage.count}</div>
-            <div className="text-sm text-gray-600 flex items-center justify-center">
+            <div className="text-2xl font-bold text-gray-900 dark:text-gray-50">{stage.count}</div>
+            <div className={`text-sm font-medium flex items-center justify-center mt-1 ${stage.color}`}>
               <span className="mr-1">{stage.icon}</span>
               {stage.label}
             </div>
@@ -405,16 +460,16 @@ const CandidatesList = () => {
         ))}
       </div>
 
-      {/* Saving & Success Notifications (keep existing) */}
+      {/* Notifications */}
       {savingCandidate && (
-        <div className="fixed top-4 right-4 z-50 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center animate-slideIn">
+        <div className="fixed top-4 right-4 z-50 bg-blue-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-3"></div>
           <span className="font-medium">Saving changes...</span>
         </div>
       )}
 
       {savedCandidate && (
-        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center animate-slideIn">
+        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center">
           <div className="w-4 h-4 rounded-full bg-white flex items-center justify-center mr-3">
             <span className="text-green-500 text-xs">✓</span>
           </div>
@@ -424,18 +479,20 @@ const CandidatesList = () => {
 
       {/* Content */}
       {viewMode === 'list' ? (
-        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
           {loading ? (
             <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading candidates...</p>
+              <div className="w-8 h-8 border-4 border-gray-200 dark:border-gray-700 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-600 dark:text-gray-400">Loading candidates...</p>
             </div>
           ) : candidates.length === 0 ? (
             <div className="p-8 text-center">
-              <p className="text-gray-600">
+              <div className="text-4xl mb-4">👥</div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-50 mb-2">No Candidates Found</h3>
+              <p className="text-gray-600 dark:text-gray-400">
                 {filteredJobTitle 
                   ? `No candidates found for ${filteredJobTitle}.`
-                  : 'No candidates found.'
+                  : 'No candidates match your current filters.'
                 }
               </p>
             </div>
@@ -443,48 +500,55 @@ const CandidatesList = () => {
             <>
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
                       {['Candidate', 'Job Applied', 'Stage', 'Experience', 'Applied', 'Actions'].map(header => (
-                        <th key={header} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th key={header} className="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                           {header}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {candidates.map(candidate => (
                       <CandidateRow 
                         key={candidate.id} 
                         candidate={candidate} 
-                        jobInfo={getJobInfo(candidate.jobId)} // ✅ Pass job info
+                        jobInfo={getJobInfo(candidate.jobId)}
                       />
                     ))}
                   </tbody>
                 </table>
               </div>
               
-              {/* Pagination */}
-              <div className="bg-white px-4 py-3 border-t flex items-center justify-between">
+              {/* Enhanced Pagination */}
+              <div className="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-t border-gray-200 dark:border-gray-600 flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-700">
-                    Showing {(pagination.page - 1) * pagination.pageSize + 1} to {Math.min(pagination.page * pagination.pageSize, pagination.total)} of {pagination.total} results
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    Showing <span className="font-medium">{(pagination.page - 1) * pagination.pageSize + 1}</span> to{' '}
+                    <span className="font-medium">{Math.min(pagination.page * pagination.pageSize, pagination.total)}</span> of{' '}
+                    <span className="font-medium">{pagination.total}</span> results
                   </p>
                 </div>
                 <div className="flex space-x-2">
                   <button
                     onClick={() => fetchCandidates(pagination.page - 1)}
                     disabled={pagination.page <= 1}
-                    className="px-3 py-1 border rounded text-sm disabled:opacity-50 hover:bg-gray-50"
+                    className="flex items-center space-x-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                   >
-                    Previous
+                    <ChevronLeft size={16} />
+                    <span>Previous</span>
                   </button>
+                  <span className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300">
+                    Page {pagination.page} of {pagination.totalPages}
+                  </span>
                   <button
                     onClick={() => fetchCandidates(pagination.page + 1)}
                     disabled={pagination.page >= pagination.totalPages}
-                    className="px-3 py-1 border rounded text-sm disabled:opacity-50 hover:bg-gray-50"
+                    className="flex items-center space-x-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                   >
-                    Next
+                    <span>Next</span>
+                    <ChevronRight size={16} />
                   </button>
                 </div>
               </div>
@@ -495,8 +559,8 @@ const CandidatesList = () => {
         <div>
           {!isKanbanReady ? (
             <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600 text-lg">Loading Kanban board...</p>
+              <div className="w-12 h-12 border-4 border-gray-200 dark:border-gray-700 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-600 dark:text-gray-400 text-lg">Loading Kanban board...</p>
             </div>
           ) : (
             <KanbanBoard
@@ -509,8 +573,8 @@ const CandidatesList = () => {
               scrollContainerRef={scrollContainerRef}
               savingCandidate={savingCandidate}
               savedCandidate={savedCandidate}
-              jobs={jobs} // ✅ Pass jobs to Kanban
-              getJobInfo={getJobInfo} // ✅ Pass helper function
+              jobs={jobs}
+              getJobInfo={getJobInfo}
             />
           )}
         </div>

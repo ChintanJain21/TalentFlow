@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { Plus, ArrowLeft, FileText, User, BarChart3, Eye, TestTube, ChevronRight } from 'lucide-react';
+import { Plus, ArrowLeft, FileText, User, BarChart3, Eye, TestTube, ChevronRight, Clock, CheckCircle, AlertCircle, Users } from 'lucide-react';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { db } from '../../../db/database';
 import QuestionBuilder from './QuestionBuilder';
-import AssessmentPreview from './AssesmentPreview'; // Your existing component
+import AssessmentPreview from './AssesmentPreview';
 
 const AssessmentBuilder = () => {
+  const { isDark } = useTheme();
   const { jobId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -40,7 +42,7 @@ const AssessmentBuilder = () => {
       const jobData = await jobResponse.json();
       setJob(jobData);
 
-      // ✅ FETCH CANDIDATES FROM DEXIE
+      // Fetch candidates from Dexie
       const candidatesData = await db.candidates
         .where('jobId')
         .equals(parseInt(jobId))
@@ -63,7 +65,6 @@ const AssessmentBuilder = () => {
           setAssessment(assessmentData);
           setMode('edit');
           
-          // ✅ FETCH SUBMISSIONS FROM DEXIE
           await fetchSubmissions(assessmentData.id || parseInt(jobId));
         } else {
           setAssessment(null);
@@ -82,7 +83,6 @@ const AssessmentBuilder = () => {
     }
   };
 
-  // ✅ SEPARATE FUNCTION TO FETCH SUBMISSIONS
   const fetchSubmissions = async (assessmentId) => {
     try {
       const submissionsData = await db.submissions
@@ -118,7 +118,6 @@ const AssessmentBuilder = () => {
 
   const handleTestClick = () => {
     if (candidates.length === 0) {
-      // Create a generic test candidate
       const testCandidate = {
         id: 'test-' + Date.now(),
         name: 'Test User',
@@ -133,23 +132,18 @@ const AssessmentBuilder = () => {
     }
   };
 
-  // ✅ HANDLE SIMULATION COMPLETION
   const handleSimulationComplete = async () => {
     setMode('edit');
-    // Refresh submissions after simulation
     if (assessment) {
       await fetchSubmissions(assessment.id || parseInt(jobId));
     }
   };
 
-  // ✅ VIEW RESPONSES HANDLER
   const handleViewResponses = async () => {
     if (submissions.length === 0) return;
     
-    // Get the latest submission with full details
     const latestSubmission = submissions[submissions.length - 1];
     
-    // Load candidate details if available
     let candidateDetails = null;
     if (latestSubmission.candidateId) {
       candidateDetails = await db.candidates.get(latestSubmission.candidateId);
@@ -164,8 +158,11 @@ const AssessmentBuilder = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center h-64 bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-gray-200 dark:border-gray-700 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading assessment...</p>
+        </div>
       </div>
     );
   }
@@ -194,20 +191,20 @@ const AssessmentBuilder = () => {
     );
   }
 
-  // ✅ SIMULATION MODE - Using your existing AssessmentPreview
+  // Simulation Mode
   if (mode === 'simulation') {
     return (
       <AssessmentPreview
         assessment={assessment}
         mode="simulation"
         candidateInfo={selectedCandidate}
-        onBack={handleSimulationComplete} // ✅ Updated to handle completion
-        onSubmit={handleSimulationComplete} // ✅ Handle submission
+        onBack={handleSimulationComplete}
+        onSubmit={handleSimulationComplete}
       />
     );
   }
 
-  // ✅ RESPONSES MODE - SHOW MOCK RESPONSES
+  // Responses Mode
   if (mode === 'responses' && selectedSubmissionForReview) {
     const submission = selectedSubmissionForReview;
     const allQuestions = assessment?.sections?.reduce((acc, section) => {
@@ -215,45 +212,53 @@ const AssessmentBuilder = () => {
     }, []) || [];
 
     return (
-      <div className="space-y-6">
-        {/* Header */}
+      <div className="space-y-6 bg-gray-50 dark:bg-gray-900 min-h-screen p-4">
+        {/* Enhanced Header */}
         <div className="flex items-center space-x-4">
           <button
             onClick={() => setMode('edit')}
-            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900"
+            className="flex items-center space-x-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
           >
             <ArrowLeft size={20} />
             <span>Back</span>
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Mock Assessment Responses</h1>
-            <p className="text-gray-600">{assessment?.title} - {job?.title}</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">Mock Assessment Responses</h1>
+            <p className="text-gray-600 dark:text-gray-400">{assessment?.title} - {job?.title}</p>
           </div>
         </div>
 
-        {/* Simple Header */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
+        {/* Enhanced Response Header */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Simulation Response Review</h3>
-              <p className="text-sm text-gray-600">
-                Completed on {new Date(submission.completedAt).toLocaleDateString()}
-              </p>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-50">Simulation Response Review</h3>
+              <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
+                <div className="flex items-center space-x-1">
+                  <Clock className="w-4 h-4" />
+                  <span>Completed on {new Date(submission.completedAt).toLocaleDateString()}</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <BarChart3 className="w-4 h-4" />
+                  <span>{Math.floor(submission.timeSpent / 60)}m {submission.timeSpent % 60}s</span>
+                </div>
+              </div>
             </div>
-            <span className="px-3 py-1 text-sm rounded-full bg-purple-100 text-purple-700 font-medium">
-              🎮 Mock Simulation
+            <span className="inline-flex items-center space-x-2 px-4 py-2 text-sm rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700 font-medium">
+              <TestTube className="w-4 h-4" />
+              <span>Mock Simulation</span>
             </span>
           </div>
         </div>
 
-        {/* Mock Responses */}
-        <div className="bg-white rounded-lg border border-gray-200">
-          <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">Questions & Responses</h3>
-            <p className="text-sm text-gray-600 mt-1">Review how the mock assessment was answered</p>
+        {/* Enhanced Mock Responses */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-50">Questions & Responses</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Review how the mock assessment was answered</p>
           </div>
 
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {allQuestions.map((question, index) => {
               const answer = submission.answers[question.id];
               const hasAnswer = answer && (Array.isArray(answer) ? answer.length > 0 : answer.toString().trim() !== '');
@@ -261,62 +266,64 @@ const AssessmentBuilder = () => {
               return (
                 <div key={question.id} className="p-6">
                   <div className="flex items-start space-x-4">
-                    {/* Question Number */}
-                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-medium">
+                    {/* Enhanced Question Number */}
+                    <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 flex items-center justify-center text-sm font-bold border border-blue-200 dark:border-blue-700">
                       {index + 1}
                     </div>
 
                     <div className="flex-1">
-                      {/* Question */}
+                      {/* Enhanced Question */}
                       <div className="mb-4">
-                        <h4 className="font-medium text-gray-900 mb-2">{question.title}</h4>
-                        <div className="text-sm text-gray-500 capitalize">
-                          {question.type.replace('-', ' ')} question
+                        <h4 className="font-bold text-gray-900 dark:text-gray-50 mb-2">{question.title}</h4>
+                        <div className="inline-flex items-center space-x-2 text-sm">
+                          <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-md font-medium capitalize">
+                            {question.type.replace('-', ' ')} question
+                          </span>
                         </div>
                       </div>
 
-                      {/* Mock Answer */}
+                      {/* Enhanced Mock Answer */}
                       <div>
-                        <p className="text-sm font-medium text-gray-700 mb-2">Mock Response:</p>
+                        <p className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">Mock Response:</p>
                         
                         {hasAnswer ? (
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
                             {question.type === 'single-choice' || question.type === 'multi-choice' ? (
                               <div className="space-y-2">
                                 {Array.isArray(answer) ? (
                                   answer.map((option, idx) => (
-                                    <div key={idx} className="flex items-center space-x-2">
+                                    <div key={idx} className="flex items-center space-x-3">
                                       <div className={`w-4 h-4 bg-blue-600 ${question.type === 'single-choice' ? 'rounded-full' : 'rounded'}`}></div>
-                                      <span className="text-blue-800 font-medium">{option}</span>
+                                      <span className="text-blue-800 dark:text-blue-300 font-medium">{option}</span>
                                     </div>
                                   ))
                                 ) : (
-                                  <div className="flex items-center space-x-2">
+                                  <div className="flex items-center space-x-3">
                                     <div className="w-4 h-4 rounded-full bg-blue-600"></div>
-                                    <span className="text-blue-800 font-medium">{answer}</span>
+                                    <span className="text-blue-800 dark:text-blue-300 font-medium">{answer}</span>
                                   </div>
                                 )}
                               </div>
                             ) : (
-                              <p className="text-blue-800">{answer}</p>
+                              <p className="text-blue-800 dark:text-blue-300">{answer}</p>
                             )}
                           </div>
                         ) : (
-                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                            <span className="text-gray-500 italic">No response provided</span>
+                          <div className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl p-4">
+                            <span className="text-gray-500 dark:text-gray-400 italic">No response provided</span>
                           </div>
                         )}
 
-                        {/* Show available options for reference */}
+                        {/* Enhanced Available Options */}
                         {(question.type === 'single-choice' || question.type === 'multi-choice') && question.options && (
-                          <div className="mt-3">
-                            <p className="text-xs font-medium text-gray-600 mb-2">Available choices were:</p>
-                            <div className="bg-gray-50 rounded-lg p-3">
-                              <div className="space-y-1">
+                          <div className="mt-4">
+                            <p className="text-xs font-bold text-gray-600 dark:text-gray-400 mb-2">Available choices were:</p>
+                            <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 border border-gray-200 dark:border-gray-600">
+                              <div className="space-y-2">
                                 {question.options.filter(opt => opt.trim()).map((option, idx) => (
-                                  <div key={idx} className="flex items-center space-x-2">
-                                    <div className={`w-2 h-2 border border-gray-400 ${question.type === 'single-choice' ? 'rounded-full' : 'rounded-sm'}`}></div>
-                                    <span className="text-gray-600 text-sm">{option}</span>
+                                  <div key={idx} className="flex items-center space-x-3">
+                                    <div className={`w-3 h-3 border-2 border-gray-400 dark:border-gray-500 ${question.type === 'single-choice' ? 'rounded-full' : 'rounded-sm'}`}></div>
+                                    <span className="text-gray-600 dark:text-gray-300 text-sm">{option}</span>
                                   </div>
                                 ))}
                               </div>
@@ -332,13 +339,14 @@ const AssessmentBuilder = () => {
           </div>
         </div>
 
-        {/* Simple Back Button */}
+        {/* Enhanced Back Button */}
         <div className="flex justify-center">
           <button
             onClick={() => setMode('edit')}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="flex items-center space-x-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors shadow-lg"
           >
-            Back to Assessment
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Assessment</span>
           </button>
         </div>
       </div>
@@ -348,52 +356,52 @@ const AssessmentBuilder = () => {
   // Candidate Selection Mode
   if (mode === 'selectCandidate') {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 bg-gray-50 dark:bg-gray-900 min-h-screen p-4">
         <div className="flex items-center space-x-4">
           <button
             onClick={() => setMode('edit')}
-            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900"
+            className="flex items-center space-x-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
           >
             <ArrowLeft size={20} />
             <span>Back</span>
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Select Candidate to Simulate</h1>
-            <p className="text-gray-600">Choose a candidate who applied to {job?.title}</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">Select Candidate to Simulate</h1>
+            <p className="text-gray-600 dark:text-gray-400">Choose a candidate who applied to {job?.title}</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border border-gray-200">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-50">
               Candidates Applied ({candidates.length})
             </h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
               Test the assessment as if you were one of these candidates
             </p>
           </div>
 
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {candidates.map((candidate) => (
-              <div key={candidate.id} className="p-6 hover:bg-gray-50 transition-colors">
+              <div key={candidate.id} className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-gradient-to-r from-blue-100 to-blue-200 rounded-full flex items-center justify-center">
-                      <span className="text-blue-600 font-bold text-lg">
+                    <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                      <span className="text-white font-bold text-lg">
                         {candidate.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                       </span>
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{candidate.name}</h3>
-                      <p className="text-sm text-gray-600">{candidate.email}</p>
-                      <div className="flex items-center space-x-3 mt-1 text-sm text-gray-500">
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-50">{candidate.name}</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{candidate.email}</p>
+                      <div className="flex items-center space-x-3 mt-1 text-sm text-gray-500 dark:text-gray-500">
                         <span>{candidate.experience} years exp</span>
                         <span>•</span>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          candidate.stage === 'hired' ? 'bg-green-100 text-green-800' :
-                          candidate.stage === 'rejected' ? 'bg-red-100 text-red-800' :
-                          candidate.stage === 'offer' ? 'bg-orange-100 text-orange-800' :
-                          'bg-blue-100 text-blue-800'
+                          candidate.stage === 'hired' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                          candidate.stage === 'rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' :
+                          candidate.stage === 'offer' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300' :
+                          'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
                         }`}>
                           {candidate.stage}
                         </span>
@@ -405,7 +413,7 @@ const AssessmentBuilder = () => {
                   
                   <button
                     onClick={() => handleTestAsCandidate(candidate)}
-                    className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-colors font-medium"
                   >
                     <TestTube size={16} />
                     <span>Test as {candidate.name.split(' ')[0]}</span>
@@ -421,26 +429,29 @@ const AssessmentBuilder = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-6 bg-gray-50 dark:bg-gray-900 min-h-screen p-4">
+      {/* Enhanced Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <Link
             to={`/jobs/${jobId}`}
-            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900"
+            className="flex items-center space-x-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
           >
             <ArrowLeft size={20} />
             <span>Back to Job</span>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">
               {isForceCreateMode ? 'Create Assessment' : 'Assessment'} for {job?.title}
             </h1>
-            <p className="text-gray-600">{job?.company} • {job?.location}</p>
+            <p className="text-gray-600 dark:text-gray-400">{job?.company} • {job?.location}</p>
             {isForceCreateMode && (
-              <p className="text-blue-600 text-sm font-medium mt-1">
-                🎯 Create Mode - Starting with blank assessment
-              </p>
+              <div className="flex items-center space-x-2 mt-1">
+                <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <p className="text-blue-600 dark:text-blue-400 text-sm font-medium">
+                  Create Mode - Starting with blank assessment
+                </p>
+              </div>
             )}
           </div>
         </div>
@@ -448,23 +459,25 @@ const AssessmentBuilder = () => {
 
       {/* Create Mode */}
       {mode === 'create' && (
-        <div className="bg-white rounded-lg border border-gray-200 p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 shadow-sm">
           <div className="text-center py-12">
-            <FileText size={64} className="mx-auto text-gray-400 mb-6" />
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
+            <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-2xl mx-auto mb-6 flex items-center justify-center">
+              <FileText size={40} className="text-gray-400 dark:text-gray-500" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-50 mb-4">
               {isForceCreateMode ? 'Create New Assessment' : 'No Assessment Created Yet'}
             </h2>
-            <p className="text-gray-600 mb-6 max-w-md mx-auto">
+            <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
               Create a comprehensive assessment for <strong>{job?.title}</strong> position 
               with different question types, sections, and validation rules.
             </p>
             
             <button
               onClick={() => setMode('builder')}
-              className="flex items-center space-x-2 px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg mx-auto"
+              className="flex items-center space-x-2 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors shadow-lg mx-auto font-medium"
             >
               <Plus size={20} />
-              <span className="font-medium">
+              <span>
                 {isForceCreateMode ? 'Start Creating Assessment' : 'Create Assessment'}
               </span>
             </button>
@@ -475,35 +488,36 @@ const AssessmentBuilder = () => {
       {/* Edit Mode */}
       {mode === 'edit' && assessment && (
         <div className="space-y-6">
-          {/* Assessment Overview */}
-          <div className="bg-white rounded-lg border border-gray-200 p-8">
+          {/* Enhanced Assessment Overview */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 shadow-sm">
             <div className="flex items-start justify-between mb-6">
               <div className="flex-1">
                 <div className="flex items-center space-x-3 mb-4">
-                  <h2 className="text-xl font-bold text-gray-900">{assessment.title}</h2>
-                  <span className="px-3 py-1 text-sm rounded-full bg-green-100 text-green-800">
-                    Active
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-gray-50">{assessment.title}</h2>
+                  <span className="inline-flex items-center space-x-1 px-3 py-1 text-sm rounded-full bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-700">
+                    <CheckCircle className="w-3 h-3" />
+                    <span>Active</span>
                   </span>
                 </div>
                 
                 {assessment.description && (
-                  <p className="text-gray-600 mb-4">{assessment.description}</p>
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">{assessment.description}</p>
                 )}
                 
-                <div className="flex items-center space-x-6 text-sm text-gray-500">
-                  <div className="flex items-center space-x-1">
-                    <span>📋</span>
+                <div className="flex items-center space-x-6 text-sm text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center space-x-2">
+                    <FileText className="w-4 h-4" />
                     <span>{assessment.sections?.length || 0} sections</span>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <span>❓</span>
+                  <div className="flex items-center space-x-2">
+                    <BarChart3 className="w-4 h-4" />
                     <span>
                       {assessment.sections?.reduce((total, section) => 
                         total + (section.questions?.length || 0), 0) || 0} questions
                     </span>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <span>👥</span>
+                  <div className="flex items-center space-x-2">
+                    <Users className="w-4 h-4" />
                     <span>{candidates.length} candidates applied</span>
                   </div>
                 </div>
@@ -511,63 +525,63 @@ const AssessmentBuilder = () => {
               
               <button
                 onClick={() => setMode('builder')}
-                className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                className="flex items-center space-x-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
               >
                 <span>Edit Assessment</span>
               </button>
             </div>
 
-            {/* Quick Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-6 border-t border-gray-200">
+            {/* Enhanced Quick Actions */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={() => setMode('builder')}
-                className="flex items-center justify-center space-x-2 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="flex items-center justify-center space-x-2 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 <FileText size={16} />
-                <span>Edit Questions</span>
+                <span className="font-medium">Edit Questions</span>
               </button>
               
               <button
                 onClick={() => setMode('preview')}
-                className="flex items-center justify-center space-x-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                className="flex items-center justify-center space-x-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
               >
                 <Eye size={16} />
-                <span>Preview</span>
+                <span className="font-medium">Preview</span>
               </button>
               
               <button
                 onClick={handleTestClick}
-                className="flex items-center justify-center space-x-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                className="flex items-center justify-center space-x-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-colors"
               >
                 <TestTube size={16} />
-                <span>Test as Candidate</span>
+                <span className="font-medium">Test as Candidate</span>
               </button>
               
               <button
                 onClick={handleViewResponses}
-                className={`flex items-center justify-center space-x-2 px-4 py-3 rounded-lg ${
+                className={`flex items-center justify-center space-x-2 px-4 py-3 rounded-xl transition-colors ${
                   submissions.length === 0
-                    ? 'border border-gray-300 text-gray-400 cursor-not-allowed'
-                    : 'border border-blue-300 text-blue-600 hover:bg-blue-50'
+                    ? 'border border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                    : 'border border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
                 }`}
                 disabled={submissions.length === 0}
               >
                 <BarChart3 size={16} />
-                <span>View Responses ({submissions.length})</span>
+                <span className="font-medium">View Responses ({submissions.length})</span>
               </button>
             </div>
           </div>
 
-          {/* Assessment Preview */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="font-medium text-gray-900 mb-4">Assessment Structure</h3>
+          {/* Enhanced Assessment Preview */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
+            <h3 className="font-bold text-gray-900 dark:text-gray-50 mb-4">Assessment Structure</h3>
             
             {assessment.sections?.map((section, index) => (
-              <div key={section.id} className="mb-4 p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-medium text-gray-800 mb-2">
+              <div key={section.id} className="mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
+                <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-2">
                   {index + 1}. {section.title}
                 </h4>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
                   {section.questions?.length || 0} questions
                   {section.questions?.length > 0 && (
                     <span className="ml-2">
@@ -579,29 +593,29 @@ const AssessmentBuilder = () => {
             ))}
             
             {(!assessment.sections || assessment.sections.length === 0) && (
-              <p className="text-gray-500 italic">No sections created yet.</p>
+              <p className="text-gray-500 dark:text-gray-400 italic">No sections created yet.</p>
             )}
           </div>
 
-          {/* Candidates & Results Grid */}
+          {/* Enhanced Candidates & Results Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Job-Specific Candidates */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="font-medium text-gray-900 mb-4">
+            {/* Enhanced Job-Specific Candidates */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
+              <h3 className="font-bold text-gray-900 dark:text-gray-50 mb-4">
                 Candidates Applied ({candidates.length})
               </h3>
               
               {candidates.length > 0 ? (
                 <div className="space-y-3">
                   {candidates.slice(0, 5).map(candidate => (
-                    <div key={candidate.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div key={candidate.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
                       <div>
-                        <p className="text-sm font-medium">{candidate.name}</p>
-                        <p className="text-xs text-gray-500">{candidate.stage}</p>
+                        <p className="text-sm font-bold text-gray-900 dark:text-gray-50">{candidate.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{candidate.stage}</p>
                       </div>
                       <button
                         onClick={() => handleTestAsCandidate(candidate)}
-                        className="text-xs px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                        className="text-xs px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
                       >
                         Test as {candidate.name.split(' ')[0]}
                       </button>
@@ -611,7 +625,7 @@ const AssessmentBuilder = () => {
                   {candidates.length > 5 && (
                     <button
                       onClick={() => setMode('selectCandidate')}
-                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
                     >
                       View all {candidates.length} candidates →
                     </button>
@@ -619,11 +633,13 @@ const AssessmentBuilder = () => {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <User className="mx-auto text-gray-400 mb-2" size={32} />
-                  <p className="text-sm text-gray-500">No candidates applied yet</p>
+                  <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-2xl mx-auto mb-4 flex items-center justify-center">
+                    <User className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                  </div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">No candidates applied yet</p>
                   <button
                     onClick={handleTestClick}
-                    className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
                   >
                     Test assessment anyway →
                   </button>
@@ -631,35 +647,35 @@ const AssessmentBuilder = () => {
               )}
             </div>
 
-            {/* ✅ UPDATED Test Results - Mock Responses Only */}
+            {/* Enhanced Test Results */}
             {submissions.length > 0 && (
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="font-medium text-gray-900 mb-4">Mock Test History</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
+                <h3 className="font-bold text-gray-900 dark:text-gray-50 mb-4">Mock Test History</h3>
                 
                 <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div className="text-center p-3 bg-blue-50 rounded-lg">
-                    <div className="text-xl font-bold text-blue-600">{submissions.length}</div>
-                    <div className="text-xs text-blue-800">Simulations</div>
+                  <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                    <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{submissions.length}</div>
+                    <div className="text-xs text-blue-800 dark:text-blue-300">Simulations</div>
                   </div>
-                  <div className="text-center p-3 bg-purple-50 rounded-lg">
-                    <div className="text-xl font-bold text-purple-600">
+                  <div className="text-center p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-800">
+                    <div className="text-xl font-bold text-purple-600 dark:text-purple-400">
                       {Math.floor(submissions.reduce((acc, sub) => acc + (sub.timeSpent || 0), 0) / submissions.length / 60)}m
                     </div>
-                    <div className="text-xs text-purple-800">Avg Time</div>
+                    <div className="text-xs text-purple-800 dark:text-purple-300">Avg Time</div>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   {submissions.slice(-3).map((submission, index) => (
-                    <div key={submission.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                    <div key={submission.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
                       <div>
-                        <p className="text-sm font-medium">Mock Test #{submissions.length - index}</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-sm font-bold text-gray-900 dark:text-gray-50">Mock Test #{submissions.length - index}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           {new Date(submission.completedAt).toLocaleDateString()}
                         </p>
                       </div>
                       <div className="text-right">
-                        <span className="text-sm text-purple-600 font-medium">
+                        <span className="text-sm text-purple-600 dark:text-purple-400 font-medium">
                           {Math.floor(submission.timeSpent / 60)}m {submission.timeSpent % 60}s
                         </span>
                         <button
@@ -667,7 +683,7 @@ const AssessmentBuilder = () => {
                             setSelectedSubmissionForReview(submission);
                             setMode('responses');
                           }}
-                          className="block text-xs text-blue-600 hover:text-blue-700 mt-1"
+                          className="block text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mt-1 font-medium"
                         >
                           View Responses
                         </button>
@@ -678,7 +694,7 @@ const AssessmentBuilder = () => {
 
                 <button
                   onClick={handleViewResponses}
-                  className="w-full mt-4 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  className="w-full mt-4 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
                 >
                   View Latest Responses →
                 </button>
