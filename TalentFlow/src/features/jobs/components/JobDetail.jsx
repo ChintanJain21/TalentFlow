@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Edit, Archive, ArchiveRestore, Users, MapPin, Building, Calendar, Tag, X, Save, ClipboardList, Plus, CheckCircle } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { db } from '../../../db/database'; // ✅ ADD THIS IMPORT
 
 const JobDetail = () => {
   const { isDark } = useTheme();
@@ -39,32 +40,53 @@ const JobDetail = () => {
     if (id) fetchJobData();
   }, [id]);
 
+  // ✅ FIXED - IndexedDB only data fetching
   const fetchJobData = async () => {
     setLoading(true);
+    setError(null);
+    
     try {
-      const [jobRes, assessmentRes, candidatesRes] = await Promise.all([
-        fetch(`/api/jobs/${id}`),
-        fetch(`/api/assessments/${id}`).catch(() => ({ ok: false })),
-        fetch(`/api/candidates?jobId=${id}&pageSize=100`).catch(() => ({ ok: false }))
-      ]);
-
-      if (!jobRes.ok) {
-        setError(jobRes.status === 404 ? 'Job not found' : 'Failed to load job');
+      const jobId = parseInt(id);
+      if (isNaN(jobId)) {
+        setError('Invalid job ID');
         return;
       }
 
-      const jobData = await jobRes.json();
+      console.log('🔍 Fetching job data from IndexedDB:', jobId);
+
+      // Fetch job from IndexedDB
+      const jobData = await db.jobs.get(jobId);
+      if (!jobData) {
+        setError('Job not found');
+        return;
+      }
+
+      // Fetch candidates for this job
+      const jobCandidates = await db.candidates
+        .where('jobId')
+        .equals(jobId)
+        .toArray();
+
+      // Check if assessment exists for this job
+      const jobAssessments = await db.assessments
+        .where('jobId')
+        .equals(jobId)
+        .toArray();
+
+      console.log('✅ Job data loaded:', {
+        job: jobData.title,
+        candidates: jobCandidates.length,
+        assessments: jobAssessments.length
+      });
+
       setJob(jobData);
       setEditForm(jobData);
-      setAssessmentExists(assessmentRes.ok);
+      setCandidates(jobCandidates.slice(0, 5)); // Show first 5 candidates
+      setCandidateCount(jobCandidates.length);
+      setAssessmentExists(jobAssessments.length > 0);
 
-      if (candidatesRes.ok) {
-        const candidatesData = await candidatesRes.json();
-        const jobCandidates = candidatesData.data || [];
-        setCandidates(jobCandidates.slice(0, 5));
-        setCandidateCount(jobCandidates.length);
-      }
     } catch (error) {
+      console.error('❌ Error fetching job data:', error);
       setError('Failed to load job');
     } finally {
       setLoading(false);
@@ -72,48 +94,52 @@ const JobDetail = () => {
     }
   };
 
+  // ✅ FIXED - IndexedDB job update
   const handleSaveJob = async () => {
     setSaving(true);
     try {
-      const response = await fetch(`/api/jobs/${job.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: editForm.title,
-          department: editForm.department || editForm.company,
-          location: editForm.location,
-          description: editForm.description
-        })
-      });
+      const updateData = {
+        title: editForm.title,
+        department: editForm.department || editForm.company,
+        location: editForm.location,
+        description: editForm.description,
+        updatedAt: new Date().toISOString()
+      };
 
-      if (response.ok) {
-        const updatedJob = await response.json();
-        setJob(updatedJob);
-        setShowEditModal(false);
-      }
+      await db.jobs.update(job.id, updateData);
+      
+      const updatedJob = await db.jobs.get(job.id);
+      setJob(updatedJob);
+      setShowEditModal(false);
+      
+      console.log('✅ Job updated successfully');
     } catch (error) {
+      console.error('❌ Failed to update job:', error);
       alert('Failed to update job');
     } finally {
       setSaving(false);
     }
   };
 
+  // ✅ FIXED - IndexedDB archive toggle
   const handleArchiveToggle = async () => {
     if (!job) return;
     setUpdating(true);
+    
     try {
       const newStatus = job.status === 'active' ? 'archived' : 'active';
-      const response = await fetch(`/api/jobs/${job.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
+      
+      await db.jobs.update(job.id, {
+        status: newStatus,
+        updatedAt: new Date().toISOString()
       });
 
-      if (response.ok) {
-        const updatedJob = await response.json();
-        setJob(updatedJob);
-      }
+      const updatedJob = await db.jobs.get(job.id);
+      setJob(updatedJob);
+      
+      console.log('✅ Job status updated:', newStatus);
     } catch (error) {
+      console.error('❌ Failed to update job status:', error);
       alert('Failed to update job status');
     } finally {
       setUpdating(false);
@@ -127,6 +153,7 @@ const JobDetail = () => {
       offer: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 border-orange-200 dark:border-orange-700',
       tech: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-700',
       screen: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700',
+      interview: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-700',
       default: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-700'
     };
     return colors[stage] || colors.default;
@@ -254,8 +281,8 @@ const JobDetail = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {[
-              { icon: Building, label: 'Company', value: job.department || job.company, color: 'blue' },
-              { icon: MapPin, label: 'Location', value: job.location, color: 'green' },
+              { icon: Building, label: 'Department', value: job.department || job.company || 'N/A', color: 'blue' },
+              { icon: MapPin, label: 'Location', value: job.location || 'N/A', color: 'green' },
               { icon: Users, label: 'Applicants', value: candidateCount, color: 'purple' },
               { icon: Calendar, label: 'Posted', value: job.createdAt ? new Date(job.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Recent', color: 'orange' }
             ].map((item, index) => (
@@ -315,19 +342,19 @@ const JobDetail = () => {
                       <div className="flex items-center space-x-4">
                         <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
                           <span className="text-blue-600 dark:text-blue-400 font-bold text-lg">
-                            {candidate.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                            {candidate.name ? candidate.name.split(' ').map(n => n[0]).join('').slice(0, 2) : 'NA'}
                           </span>
                         </div>
                         <div>
                           <Link to={`/candidates/${candidate.id}`} className={`text-lg font-bold ${styles.text.title} hover:text-blue-600 transition-colors`}>
-                            {candidate.name}
+                            {candidate.name || 'Unknown'}
                           </Link>
-                          <p className={styles.text.subtitle}>{candidate.email}</p>
-                          <p className="text-xs text-gray-500">Applied on {new Date(candidate.appliedDate).toLocaleDateString()}</p>
+                          <p className={styles.text.subtitle}>{candidate.email || 'No email'}</p>
+                          <p className="text-xs text-gray-500">Applied on {new Date(candidate.appliedDate || candidate.createdAt).toLocaleDateString()}</p>
                         </div>
                       </div>
-                      <span className={`px-3 py-1 text-sm font-medium rounded-full border ${getStageColor(candidate.stage)}`}>
-                        {candidate.stage}
+                      <span className={`px-3 py-1 text-sm font-medium rounded-full border ${getStageColor(candidate.stage || 'applied')}`}>
+                        {candidate.stage || 'applied'}
                       </span>
                     </div>
                   ))}
