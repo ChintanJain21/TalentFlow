@@ -1,91 +1,213 @@
-import { useState, useCallback } from 'react';
+
+import { useState, useEffect, useCallback } from 'react';
+import { db } from '../../../db/database';
 
 const useAssessmentBuilder = (initialAssessment = null) => {
-  // Assessment state
-  const [assessment, setAssessment] = useState(initialAssessment || {
-    title: '',
-    description: '',
-    jobId: null,
-    sections: [{
-      id: `section-${Date.now()}`,
-      title: 'Section 1',
-      questions: []
-    }]
-  });
-
+  const [assessment, setAssessment] = useState(
+    initialAssessment || {
+      id: null,
+      jobId: null,
+      title: '',
+      description: '',
+      sections: [{
+        id: Date.now(),
+        title: 'Section 1',
+        description: '',
+        questions: []
+      }],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+  );
+  
   const [isDirty, setIsDirty] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
-  // ✅ FIXED: Restore template titles for sidebar, keep empty options only
+  // ✅ FIXED - Empty question templates
   const questionTemplates = {
     'single-choice': {
+      title: 'Single Choice',
       type: 'single-choice',
-      title: 'Single Choice', // ✅ RESTORED for sidebar display
-      required: true,
-      options: ['', ''] // ✅ ONLY this stays empty for placeholder fix
+      question: '', // ✅ Empty instead of placeholder text
+      options: ['', '', ''], // ✅ Empty options instead of "Option 1", etc.
+      required: false
     },
     'multi-choice': {
+      title: 'Multiple Choice',
       type: 'multi-choice',
-      title: 'Multiple Choice', // ✅ RESTORED for sidebar display
-      required: false,
-      options: ['', ''] // ✅ ONLY this stays empty for placeholder fix
+      question: '', // ✅ Empty instead of placeholder text
+      options: ['', '', ''], // ✅ Empty options instead of "Option 1", etc.
+      required: false
     },
     'short-text': {
+      title: 'Short Text',
       type: 'short-text',
-      title: 'Short Text', // ✅ RESTORED for sidebar display
-      required: true,
-      validation: { maxLength: 100 }
+      question: '', // ✅ Empty instead of placeholder text
+      placeholder: 'Enter your answer...',
+      required: false,
+      maxLength: 100
     },
     'long-text': {
+      title: 'Long Text',
       type: 'long-text',
-      title: 'Long Text', // ✅ RESTORED for sidebar display
+      question: '', // ✅ Empty instead of placeholder text
+      placeholder: 'Enter your detailed answer...',
       required: false,
-      validation: { maxLength: 500 }
+      maxLength: 1000
     },
     'numeric': {
+      title: 'Numeric',
       type: 'numeric',
-      title: 'Numeric', // ✅ RESTORED for sidebar display
-      required: true,
-      validation: { min: 0, max: 100 }
+      question: '', // ✅ Empty instead of placeholder text
+      placeholder: 'Enter a number...',
+      required: false,
+      min: null,
+      max: null
     },
     'file-upload': {
+      title: 'File Upload',
       type: 'file-upload',
-      title: 'File Upload', // ✅ RESTORED for sidebar display
-      required: false,
-      validation: { maxSize: '5MB', allowedTypes: ['pdf', 'doc', 'docx'] }
+      question: '', // ✅ Empty instead of placeholder text
+      acceptedTypes: ['.pdf', '.doc', '.docx'],
+      maxSize: 5,
+      required: false
     }
   };
 
-  // Update assessment basic info
+  // Mark as dirty when assessment changes
+  useEffect(() => {
+    if (initialAssessment) {
+      setIsDirty(JSON.stringify(assessment) !== JSON.stringify(initialAssessment));
+    } else {
+      setIsDirty(true);
+    }
+  }, [assessment, initialAssessment]);
+
+  // Save assessment to IndexedDB
+  const saveAssessment = useCallback(async () => {
+    setLoading(true);
+    setErrors({});
+
+    try {
+      console.log('💾 Saving assessment to IndexedDB:', assessment);
+
+      // Validate assessment
+      const validationErrors = validateAssessment(assessment);
+      if (Object.keys(validationErrors).length > 0) {
+        setErrors(validationErrors);
+        console.error('❌ Validation errors:', validationErrors);
+        return false;
+      }
+
+      const assessmentData = {
+        ...assessment,
+        updatedAt: new Date().toISOString()
+      };
+
+      let savedId;
+
+      if (assessment.id) {
+        // Update existing assessment
+        console.log('📝 Updating existing assessment:', assessment.id);
+        await db.assessments.update(assessment.id, assessmentData);
+        savedId = assessment.id;
+      } else {
+        // Create new assessment
+        console.log('🆕 Creating new assessment');
+        delete assessmentData.id; // Remove null id
+        savedId = await db.assessments.add(assessmentData);
+        console.log('✅ New assessment created with ID:', savedId);
+      }
+
+      // Update local state with saved ID
+      setAssessment(prev => ({
+        ...prev,
+        id: savedId,
+        updatedAt: assessmentData.updatedAt
+      }));
+
+      setIsDirty(false);
+      console.log('✅ Assessment saved successfully:', savedId);
+      return true;
+
+    } catch (error) {
+      console.error('❌ Error saving assessment:', error);
+      setErrors({ save: 'Failed to save assessment. Please try again.' });
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [assessment]);
+
+  // Validation function
+  const validateAssessment = (assessment) => {
+    const errors = {};
+
+    // Validate title
+    if (!assessment.title?.trim()) {
+      errors.title = 'Assessment title is required';
+    }
+
+    // Validate sections
+    if (!assessment.sections || assessment.sections.length === 0) {
+      errors.sections = 'At least one section is required';
+    } else {
+      assessment.sections.forEach((section, index) => {
+        if (!section.title?.trim()) {
+          errors[`section-${section.id}-title`] = `Section ${index + 1} title is required`;
+        }
+        
+        if (!section.questions || section.questions.length === 0) {
+          errors[`section-${section.id}-questions`] = `Section ${index + 1} must have at least one question`;
+        } else {
+          section.questions.forEach((question) => {
+            // ✅ FIXED - Don't require question title initially, but validate on save
+            if (!question.title?.trim() && !question.question?.trim()) {
+              errors[`question-${question.id}`] = 'Question text is required';
+            }
+            
+            // Validate choice questions have options
+            if ((question.type === 'single-choice' || question.type === 'multi-choice')) {
+              const validOptions = question.options?.filter(opt => opt && opt.trim()) || [];
+              if (validOptions.length < 2) {
+                errors[`question-${question.id}`] = 'Choice questions must have at least 2 non-empty options';
+              }
+            }
+          });
+        }
+      });
+    }
+
+    return errors;
+  };
+
+  // Update assessment
   const updateAssessment = useCallback((updates) => {
     setAssessment(prev => ({ ...prev, ...updates }));
-    setIsDirty(true);
   }, []);
 
-  // Section management
+  // Section operations
   const addSection = useCallback(() => {
     const newSection = {
-      id: `section-${Date.now()}`,
+      id: Date.now(),
       title: `Section ${assessment.sections.length + 1}`,
+      description: '',
       questions: []
     };
-
     setAssessment(prev => ({
       ...prev,
       sections: [...prev.sections, newSection]
     }));
-    setIsDirty(true);
   }, [assessment.sections.length]);
 
   const updateSection = useCallback((sectionId, updates) => {
     setAssessment(prev => ({
       ...prev,
-      sections: prev.sections.map(section => 
+      sections: prev.sections.map(section =>
         section.id === sectionId ? { ...section, ...updates } : section
       )
     }));
-    setIsDirty(true);
   }, []);
 
   const removeSection = useCallback((sectionId) => {
@@ -93,20 +215,9 @@ const useAssessmentBuilder = (initialAssessment = null) => {
       ...prev,
       sections: prev.sections.filter(section => section.id !== sectionId)
     }));
-    setIsDirty(true);
   }, []);
 
-  const reorderSections = useCallback((fromIndex, toIndex) => {
-    setAssessment(prev => {
-      const newSections = [...prev.sections];
-      const [movedSection] = newSections.splice(fromIndex, 1);
-      newSections.splice(toIndex, 0, movedSection);
-      return { ...prev, sections: newSections };
-    });
-    setIsDirty(true);
-  }, []);
-
-  // Question management
+  // ✅ FIXED - Question operations with empty values
   const addQuestion = useCallback((sectionId, questionType) => {
     const template = questionTemplates[questionType];
     if (!template) {
@@ -115,87 +226,82 @@ const useAssessmentBuilder = (initialAssessment = null) => {
     }
 
     const newQuestion = {
-      ...template,
-      id: `q-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      title : '', // ✅ FIXED: Use template title for new questions
+      id: Date.now(),
+      title: '', // ✅ Empty title instead of template title
+      type: questionType,
+      question: '', // ✅ Empty question text
+      ...(template.options ? { options: ['', '', ''] } : {}), // ✅ Empty options for choice questions
+      ...(template.placeholder ? { placeholder: template.placeholder } : {}),
+      ...(template.maxLength ? { maxLength: template.maxLength } : {}),
+      ...(template.acceptedTypes ? { acceptedTypes: template.acceptedTypes } : {}),
+      ...(template.maxSize ? { maxSize: template.maxSize } : {}),
+      required: false,
+      createdAt: new Date().toISOString()
     };
+
+    console.log('➕ Adding new question:', newQuestion);
 
     setAssessment(prev => ({
       ...prev,
-      sections: prev.sections.map(section => 
-        section.id === sectionId 
-          ? { ...section, questions: [...section.questions, newQuestion] }
+      sections: prev.sections.map(section =>
+        section.id === sectionId
+          ? {
+              ...section,
+              questions: [...section.questions, newQuestion]
+            }
           : section
       )
     }));
-    setIsDirty(true);
-  }, [questionTemplates]);
+  }, []);
 
   const updateQuestion = useCallback((sectionId, questionId, updates) => {
     setAssessment(prev => ({
       ...prev,
-      sections: prev.sections.map(section => 
-        section.id === sectionId 
+      sections: prev.sections.map(section =>
+        section.id === sectionId
           ? {
               ...section,
-              questions: section.questions.map(question => 
+              questions: section.questions.map(question =>
                 question.id === questionId ? { ...question, ...updates } : question
               )
             }
           : section
       )
     }));
-    setIsDirty(true);
   }, []);
 
   const removeQuestion = useCallback((sectionId, questionId) => {
     setAssessment(prev => ({
       ...prev,
-      sections: prev.sections.map(section => 
-        section.id === sectionId 
-          ? { ...section, questions: section.questions.filter(q => q.id !== questionId) }
-          : section
-      )
-    }));
-    setIsDirty(true);
-  }, []);
-
-  const reorderQuestions = useCallback((sectionId, fromIndex, toIndex) => {
-    setAssessment(prev => ({
-      ...prev,
-      sections: prev.sections.map(section => 
-        section.id === sectionId 
+      sections: prev.sections.map(section =>
+        section.id === sectionId
           ? {
               ...section,
-              questions: (() => {
-                const newQuestions = [...section.questions];
-                const [movedQuestion] = newQuestions.splice(fromIndex, 1);
-                newQuestions.splice(toIndex, 0, movedQuestion);
-                return newQuestions;
-              })()
+              questions: section.questions.filter(question => question.id !== questionId)
             }
           : section
       )
     }));
-    setIsDirty(true);
   }, []);
 
   const duplicateQuestion = useCallback((sectionId, questionId) => {
     setAssessment(prev => ({
       ...prev,
-      sections: prev.sections.map(section => 
-        section.id === sectionId 
+      sections: prev.sections.map(section =>
+        section.id === sectionId
           ? {
               ...section,
               questions: section.questions.reduce((acc, question) => {
                 acc.push(question);
                 if (question.id === questionId) {
-                  // Add duplicated question
-                  acc.push({
+                  const duplicate = {
                     ...question,
-                    id: `q-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                    title: `${question.title} (Copy)`
-                  });
+                    id: Date.now(),
+                    title: question.title ? `${question.title} (Copy)` : '',
+                    question: question.question ? `${question.question} (Copy)` : '',
+                    createdAt: new Date().toISOString()
+                  };
+                  acc.push(duplicate);
                 }
                 return acc;
               }, [])
@@ -203,154 +309,48 @@ const useAssessmentBuilder = (initialAssessment = null) => {
           : section
       )
     }));
-    setIsDirty(true);
   }, []);
 
-  // Validation
-  const validateAssessment = useCallback(() => {
-    const newErrors = {};
-
-    // Basic validation
-    if (!assessment.title.trim()) {
-      newErrors.title = 'Assessment title is required';
-    }
-
-    if (!assessment.jobId) {
-      newErrors.jobId = 'Job selection is required';
-    }
-
-    // Section validation
-    assessment.sections.forEach((section, sectionIndex) => {
-      if (!section.title.trim()) {
-        newErrors[`section-${section.id}-title`] = 'Section title is required';
-      }
-
-      if (section.questions.length === 0) {
-        newErrors[`section-${section.id}-questions`] = 'Section must have at least one question';
-      }
-
-      // Question validation
-      section.questions.forEach((question, questionIndex) => {
-        const questionKey = `question-${question.id}`;
-        
-        if (!question.title || !question.title.trim()) {
-          newErrors[`${questionKey}-title`] = 'Question title is required';
-        }
-
-        // Type-specific validation
-        if (['single-choice', 'multi-choice'].includes(question.type)) {
-          const validOptions = question.options ? question.options.filter(opt => opt && opt.trim()) : [];
-          if (validOptions.length < 2) {
-            newErrors[`${questionKey}-options`] = 'At least 2 options with content are required';
-          }
-        }
-      });
-    });
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  }, [assessment]);
-
-  // Save assessment
-  // ✅ SIMPLE FIX - Just use your existing MSW handlers
-const saveAssessment = useCallback(async () => {
-  if (!validateAssessment()) {
-    return false;
-  }
-
-  setLoading(true);
-  try {
-    // Your MSW handler expects PUT /api/assessments/:jobId
-    const response = await fetch(`/api/assessments/${assessment.jobId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(assessment)
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const savedAssessment = await response.json();
-    setAssessment(savedAssessment);
-    setIsDirty(false);
-    return true;
-  } catch (error) {
-    console.error('Save failed:', error);
-    return false;
-  } finally {
-    setLoading(false);
-  }
-}, [assessment, validateAssessment]);
-
-
-  // Reset to initial state
-  const resetAssessment = useCallback(() => {
-    setAssessment(initialAssessment || {
-      title: '',
-      description: '',
-      jobId: null,
-      sections: [{
-        id: `section-${Date.now()}`,
-        title: 'Section 1',
-        questions: []
-      }]
-    });
-    setIsDirty(false);
-    setErrors({});
-  }, [initialAssessment]);
-
-  // Get stats
+  // Get statistics
   const getStats = useCallback(() => {
-    const totalQuestions = assessment.sections.reduce((total, section) => {
-      return total + section.questions.length;
-    }, 0);
+    const totalSections = assessment.sections.length;
+    const totalQuestions = assessment.sections.reduce((total, section) => 
+      total + (section.questions?.length || 0), 0
+    );
+    const requiredQuestions = assessment.sections.reduce((total, section) => 
+      total + (section.questions?.filter(q => q.required)?.length || 0), 0
+    );
 
-    const questionTypes = assessment.sections.reduce((types, section) => {
-      section.questions.forEach(question => {
-        types[question.type] = (types[question.type] || 0) + 1;
+    const questionTypes = {};
+    assessment.sections.forEach(section => {
+      section.questions?.forEach(question => {
+        questionTypes[question.type] = (questionTypes[question.type] || 0) + 1;
       });
-      return types;
-    }, {});
+    });
 
     return {
-      totalSections: assessment.sections.length,
+      totalSections,
       totalQuestions,
-      questionTypes,
-      requiredQuestions: assessment.sections.reduce((total, section) => {
-        return total + section.questions.filter(q => q.required).length;
-      }, 0)
+      requiredQuestions,
+      questionTypes
     };
   }, [assessment]);
 
   return {
-    // State
     assessment,
     isDirty,
     loading,
     errors,
     questionTemplates,
-
-    // Assessment methods
     updateAssessment,
-    resetAssessment,
-    saveAssessment,
-    validateAssessment,
-
-    // Section methods
     addSection,
     updateSection,
     removeSection,
-    reorderSections,
-
-    // Question methods
     addQuestion,
     updateQuestion,
     removeQuestion,
-    reorderQuestions,
     duplicateQuestion,
-
-    // Utils
+    saveAssessment,
     getStats
   };
 };
