@@ -60,17 +60,22 @@ const Navbar = () => {
           
           {/* Logo Section */}
           <div className="flex items-center space-x-8">
-            <Link to="/" className="flex items-center space-x-3 group">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg transform group-hover:rotate-12 transition-transform duration-200">
-                <Sparkles className="text-white" size={20} />
-              </div>
-              <div className="hidden sm:block">
-                <h1 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
-                  TalentFlow
-                </h1>
-                <p className="text-xs text-gray-500 dark:text-gray-400 -mt-1">Hiring Platform</p>
-              </div>
-            </Link>
+           <div className="flex items-center space-x-8">
+  <Link to="/" className="flex items-center space-x-3 group">
+    <img 
+      src="/logo.png" 
+      alt="TalentFlow Logo" 
+      className="w-10 h-10 transform group-hover:rotate-12 transition-transform duration-200" 
+    />
+    <div className="hidden sm:block">
+      <h1 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+        TalentFlow
+      </h1>
+      <p className="text-xs text-gray-500 dark:text-gray-400 -mt-1">Hiring Platform</p>
+    </div>
+  </Link>
+</div>
+
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-2">
