@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { List, LayoutGrid, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { db } from '../../../db/database'; // ✅ ADD THIS IMPORT
 import CandidateFilters from './CandidateFilters';
 import CandidateRow from './CandidateRow';
 import KanbanBoard from './KanbanBoard';
@@ -198,31 +199,37 @@ const CandidatesList = () => {
     }
   };
 
-  // API calls
+  // ✅ FIXED - IndexedDB API calls
   const fetchAllCandidatesForStats = async () => {
     try {
-      let url = '/api/candidates?page=1&pageSize=2000';
-      if (jobFilter !== 'all') url += `&jobId=${jobFilter}`;
+      console.log('🔍 Fetching all candidates from IndexedDB...');
       
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      setAllCandidates(data.data || []);
+      let query = db.candidates.toCollection();
+      
+      // Apply job filter if specified
+      if (jobFilter !== 'all') {
+        const jobId = parseInt(jobFilter);
+        query = db.candidates.where('jobId').equals(jobId);
+      }
+      
+      const candidatesData = await query.toArray();
+      console.log('✅ Candidates loaded:', candidatesData.length);
+      
+      setAllCandidates(candidatesData);
     } catch (error) {
-      console.error('Error fetching candidates:', error);
+      console.error('❌ Error fetching candidates:', error);
       setAllCandidates([]);
     }
   };
 
   const fetchJobs = async () => {
     try {
-      const response = await fetch('/api/jobs?pageSize=100');
-      if (response.ok) {
-        const data = await response.json();
-        setJobs(data.data || []);
-      }
+      console.log('🔍 Fetching jobs from IndexedDB...');
+      const jobsData = await db.jobs.toArray();
+      console.log('✅ Jobs loaded:', jobsData.length);
+      setJobs(jobsData);
     } catch (error) {
-      console.error('Error fetching jobs:', error);
+      console.error('❌ Error fetching jobs:', error);
       setJobs([]);
     }
   };
@@ -230,28 +237,66 @@ const CandidatesList = () => {
   const fetchCandidates = async (page = 1) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        pageSize: pagination.pageSize.toString(),
-        ...(search && { search }),
-        ...(stageFilter !== 'all' && { stage: stageFilter }),
-        ...(jobFilter !== 'all' && { jobId: jobFilter })
-      });
-
-      const response = await fetch(`/api/candidates?${params}`);
-      const data = await response.json();
+      console.log('🔍 Fetching paginated candidates...', { page, search, stageFilter, jobFilter });
       
-      setCandidates(data.data || []);
-      setPagination({ page: data.page, pageSize: data.pageSize, total: data.total, totalPages: data.totalPages });
+      // Start with all candidates
+      let query = db.candidates.toCollection();
+      
+      // Apply filters
+      if (jobFilter !== 'all') {
+        const jobId = parseInt(jobFilter);
+        query = db.candidates.where('jobId').equals(jobId);
+      }
+      
+      let filteredCandidates = await query.toArray();
+      
+      // Apply search filter
+      if (search) {
+        filteredCandidates = filteredCandidates.filter(candidate =>
+          candidate.name.toLowerCase().includes(search.toLowerCase()) ||
+          candidate.email.toLowerCase().includes(search.toLowerCase())
+        );
+      }
+      
+      // Apply stage filter
+      if (stageFilter !== 'all') {
+        filteredCandidates = filteredCandidates.filter(candidate => 
+          candidate.stage === stageFilter
+        );
+      }
+      
+      // Sort by application date (newest first)
+      filteredCandidates.sort((a, b) => 
+        new Date(b.appliedDate || b.createdAt) - new Date(a.appliedDate || a.createdAt)
+      );
+      
+      // Calculate pagination
+      const total = filteredCandidates.length;
+      const totalPages = Math.ceil(total / pagination.pageSize);
+      const startIndex = (page - 1) * pagination.pageSize;
+      const paginatedCandidates = filteredCandidates.slice(startIndex, startIndex + pagination.pageSize);
+      
+      console.log('✅ Paginated candidates loaded:', {
+        total,
+        page,
+        pageSize: pagination.pageSize,
+        totalPages,
+        currentPageSize: paginatedCandidates.length
+      });
+      
+      setCandidates(paginatedCandidates);
+      setPagination({ page, pageSize: pagination.pageSize, total, totalPages });
+      
     } catch (error) {
-      console.error('Error fetching candidates:', error);
+      console.error('❌ Error fetching candidates:', error);
       setCandidates([]);
+      setPagination({ page: 1, pageSize: 50, total: 0, totalPages: 0 });
     } finally {
       setLoading(false);
     }
   };
 
-  // Drag handlers (keep existing logic)
+  // ✅ FIXED - IndexedDB drag handlers
   const handleDragStart = (event) => {
     if (!event?.active?.id || !allCandidates) return;
     const candidate = allCandidates.find(c => c.id === event.active.id);
@@ -318,47 +363,46 @@ const CandidatesList = () => {
     ));
 
     try {
-      const response = await fetch(`/api/candidates/${active.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stage: targetStage })
+      // ✅ FIXED - Update in IndexedDB
+      await db.candidates.update(active.id, {
+        stage: targetStage,
+        updatedAt: new Date().toISOString()
       });
 
-      if (response.ok) {
-        const updated = await response.json();
-        
-        // Success animation
-        setSavingCandidate(null);
-        setSavedCandidate(updated.id);
-        
-        // Update with server response
-        setAllCandidates(prev => prev.map(c => 
-          c.id === active.id ? { ...updated, _justSaved: true } : c
-        ));
+      // Get updated candidate
+      const updatedCandidate = await db.candidates.get(active.id);
+      
+      // Success animation
+      setSavingCandidate(null);
+      setSavedCandidate(updatedCandidate.id);
+      
+      // Update with IndexedDB response
+      setAllCandidates(prev => prev.map(c => 
+        c.id === active.id ? { ...updatedCandidate, _justSaved: true } : c
+      ));
 
-        // Clear success animation
-        setTimeout(() => {
-          setSavedCandidate(null);
-          setAllCandidates(prev => prev.map(c => 
-            c.id === updated.id ? { ...c, _justSaved: false } : c
-          ));
-        }, 2000);
+      console.log('✅ Candidate stage updated:', { 
+        id: active.id, 
+        newStage: targetStage 
+      });
 
-      } else {
-        // Rollback
-        setSavingCandidate(null);
+      // Clear success animation
+      setTimeout(() => {
+        setSavedCandidate(null);
         setAllCandidates(prev => prev.map(c => 
-          c.id === active.id ? { ...candidate, _saving: false } : c
+          c.id === updatedCandidate.id ? { ...c, _justSaved: false } : c
         ));
-        alert('Failed to update candidate stage. Please try again.');
-      }
+      }, 2000);
+
     } catch (error) {
+      console.error('❌ Failed to update candidate stage:', error);
+      
       // Rollback
       setSavingCandidate(null);
       setAllCandidates(prev => prev.map(c => 
         c.id === active.id ? { ...candidate, _saving: false } : c
       ));
-      alert('Network error. Please try again.');
+      alert('Failed to update candidate stage. Please try again.');
     }
   };
 

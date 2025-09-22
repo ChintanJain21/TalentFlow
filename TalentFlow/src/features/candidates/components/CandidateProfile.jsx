@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Phone, FileText, ExternalLink, Github, Linkedin, MapPin, DollarSign, Clock, Award } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { db } from '../../../db/database'; // ✅ ADD THIS IMPORT
 import NotesSection from './NotesSection';
 
 // Stage validation logic
@@ -86,20 +87,35 @@ const CandidateProfile = () => {
     }
   ];
 
+  // ✅ FIXED - IndexedDB fetch candidate
   const fetchCandidate = async () => {
     try {
-      const response = await fetch(`/api/candidates/${id}`);
-      if (response.ok) {
-        const data = await response.json();
-        setCandidate(data);
+      const candidateId = parseInt(id);
+      if (isNaN(candidateId)) {
+        console.error('Invalid candidate ID:', id);
+        setCandidate(null);
+        return;
+      }
+
+      console.log('🔍 Fetching candidate from IndexedDB:', candidateId);
+      const candidateData = await db.candidates.get(candidateId);
+      
+      if (candidateData) {
+        console.log('✅ Candidate loaded:', candidateData.name);
+        setCandidate(candidateData);
+      } else {
+        console.warn('❌ Candidate not found:', candidateId);
+        setCandidate(null);
       }
     } catch (error) {
-      console.error('Error fetching candidate:', error);
+      console.error('❌ Error fetching candidate:', error);
+      setCandidate(null);
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ FIXED - IndexedDB stage update
   const updateStage = async (newStage) => {
     if (!candidate) return;
 
@@ -125,25 +141,33 @@ const CandidateProfile = () => {
     setUpdating(newStage);
 
     try {
-      const response = await fetch(`/api/candidates/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stage: newStage })
+      console.log('🔄 Updating candidate stage:', { 
+        id: candidate.id, 
+        from: candidate.stage, 
+        to: newStage 
       });
 
-      if (response.ok) {
-        const updated = await response.json();
-        setSavingStage(null);
-        setSavedStage(newStage);
-        setCandidate(updated);
-        setTimeout(() => setSavedStage(null), 2000);
-      } else {
-        console.error('Failed to update stage');
-        alert('Failed to update candidate stage. Please try again.');
-      }
+      // Update in IndexedDB
+      await db.candidates.update(candidate.id, {
+        stage: newStage,
+        updatedAt: new Date().toISOString()
+      });
+
+      // Get updated candidate
+      const updatedCandidate = await db.candidates.get(candidate.id);
+      
+      setSavingStage(null);
+      setSavedStage(newStage);
+      setCandidate(updatedCandidate);
+      
+      console.log('✅ Candidate stage updated successfully');
+      
+      // Clear success animation after 2 seconds
+      setTimeout(() => setSavedStage(null), 2000);
+
     } catch (error) {
-      console.error('Error updating stage:', error);
-      alert('Network error. Please try again.');
+      console.error('❌ Error updating candidate stage:', error);
+      alert('Failed to update candidate stage. Please try again.');
     } finally {
       setUpdating(false);
       setSavingStage(null);
@@ -151,7 +175,9 @@ const CandidateProfile = () => {
   };
 
   useEffect(() => {
-    fetchCandidate();
+    if (id) {
+      fetchCandidate();
+    }
   }, [id]);
 
   const getStageInfo = (stageKey) => {
@@ -159,6 +185,7 @@ const CandidateProfile = () => {
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -167,6 +194,7 @@ const CandidateProfile = () => {
   };
 
   const formatFullDate = (dateString) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -259,47 +287,53 @@ const CandidateProfile = () => {
             
             <div className="p-6 -mt-10 relative z-10">
               <div className="w-20 h-20 bg-white dark:bg-gray-700 border-4 border-white dark:border-gray-600 rounded-full shadow-lg flex items-center justify-center text-2xl font-bold text-gray-700 dark:text-gray-300 mb-4 mx-auto">
-                {candidate.name.split(' ').map(n => n[0]).join('')}
+                {candidate.name ? candidate.name.split(' ').map(n => n[0]).join('').slice(0, 2) : 'NA'}
               </div>
               
               <div className="text-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-1">{candidate.name}</h1>
-                <p className="text-gray-600 dark:text-gray-400">{candidate.email}</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-1">{candidate.name || 'Unknown'}</h1>
+                <p className="text-gray-600 dark:text-gray-400">{candidate.email || 'No email'}</p>
                 <div className="flex items-center justify-center mt-2 text-sm text-gray-500 dark:text-gray-500">
                   <Clock size={14} className="mr-1" />
-                  <span>Applied {formatDate(candidate.appliedDate)}</span>
+                  <span>Applied {formatDate(candidate.appliedDate || candidate.createdAt)}</span>
                 </div>
               </div>
 
               {/* Quick Info Grid */}
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="text-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                  <div className="text-lg font-bold text-gray-900 dark:text-gray-50">{candidate.experience}y</div>
+                  <div className="text-lg font-bold text-gray-900 dark:text-gray-50">{candidate.experience || 0}y</div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">Experience</div>
                 </div>
                 <div className="text-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                  <div className="text-lg font-bold text-gray-900 dark:text-gray-50">${(candidate.salary / 1000).toFixed(0)}k</div>
+                  <div className="text-lg font-bold text-gray-900 dark:text-gray-50">
+                    ${candidate.salary ? (candidate.salary / 1000).toFixed(0) : 0}k
+                  </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">Expected</div>
                 </div>
                 <div className="text-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                  <div className="text-lg font-bold text-gray-900 dark:text-gray-50">{candidate.location?.split(',')[0]}</div>
+                  <div className="text-lg font-bold text-gray-900 dark:text-gray-50">
+                    {candidate.location ? candidate.location.split(',')[0] : 'Remote'}
+                  </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">Location</div>
                 </div>
                 <div className="text-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                  <div className="text-lg font-bold text-gray-900 dark:text-gray-50">{candidate.skills?.length}</div>
+                  <div className="text-lg font-bold text-gray-900 dark:text-gray-50">{candidate.skills?.length || 0}</div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">Skills</div>
                 </div>
               </div>
 
               {/* Contact */}
               <div className="space-y-3">
-                <div className="flex items-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-                  <Phone className="text-blue-600 dark:text-blue-400 mr-3" size={18} />
-                  <div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">Phone</div>
-                    <div className="font-medium text-gray-900 dark:text-gray-50">{candidate.phone}</div>
+                {candidate.phone && (
+                  <div className="flex items-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                    <Phone className="text-blue-600 dark:text-blue-400 mr-3" size={18} />
+                    <div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Phone</div>
+                      <div className="font-medium text-gray-900 dark:text-gray-50">{candidate.phone}</div>
+                    </div>
                   </div>
-                </div>
+                )}
                 
                 {/* Links */}
                 <div className="flex gap-2">
@@ -327,22 +361,24 @@ const CandidateProfile = () => {
           </div>
 
           {/* Skills */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-200 dark:border-gray-700 transition-colors">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-4 flex items-center">
-              <Award className="mr-2" size={20} />
-              Skills Arsenal
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {candidate.skills?.map((skill, index) => (
-                <span
-                  key={index}
-                  className={`px-3 py-1 bg-gradient-to-r ${currentStage.color} text-white rounded-full text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-default`}
-                >
-                  {skill}
-                </span>
-              ))}
+          {candidate.skills && candidate.skills.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-200 dark:border-gray-700 transition-colors">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-4 flex items-center">
+                <Award className="mr-2" size={20} />
+                Skills Arsenal
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {candidate.skills.map((skill, index) => (
+                  <span
+                    key={index}
+                    className={`px-3 py-1 bg-gradient-to-r ${currentStage.color} text-white rounded-full text-xs font-medium shadow-sm hover:shadow-md transition-shadow cursor-default`}
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Right Side - Dynamic Content */}

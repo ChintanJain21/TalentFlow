@@ -7,6 +7,7 @@ const CandidateRow = ({ candidate, jobInfo }) => {
   const { isDark } = useTheme();
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -45,6 +46,13 @@ const CandidateRow = ({ candidate, jobInfo }) => {
     location: 'Unknown' 
   };
 
+  // Safe candidate data access
+  const safeName = candidate?.name || 'Unknown';
+  const safeEmail = candidate?.email || 'No email';
+  const safeStage = candidate?.stage || 'applied';
+  const safeExperience = candidate?.experience || 0;
+  const safeAppliedDate = candidate?.appliedDate || candidate?.createdAt;
+
   return (
     <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
       
@@ -52,14 +60,14 @@ const CandidateRow = ({ candidate, jobInfo }) => {
       <td className="px-6 py-4">
         <div className="flex items-center">
           <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
-            {candidate.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+            {safeName.split(' ').map(n => n[0]).join('').slice(0, 2)}
           </div>
           <div className="ml-4">
             <div className="text-sm font-bold text-gray-900 dark:text-gray-50">
-              {candidate.name}
+              {safeName}
             </div>
             <div className="text-sm text-gray-500 dark:text-gray-400">
-              {candidate.email}
+              {safeEmail}
             </div>
           </div>
         </div>
@@ -71,7 +79,7 @@ const CandidateRow = ({ candidate, jobInfo }) => {
           <div className="flex items-center space-x-2 text-blue-600 dark:text-blue-400 mb-1">
             <Briefcase size={14} />
             <Link 
-              to={`/jobs/${candidate.jobId}`}
+              to={`/jobs/${candidate?.jobId || 1}`}
               className="font-bold hover:underline transition-colors hover:text-blue-700 dark:hover:text-blue-300"
             >
               {safeJobInfo.title}
@@ -93,9 +101,9 @@ const CandidateRow = ({ candidate, jobInfo }) => {
 
       {/* Stage */}
       <td className="px-6 py-4">
-        <span className={`inline-flex items-center space-x-1 px-3 py-1.5 text-xs font-bold rounded-full border ${getStageColor(candidate.stage)}`}>
-          <span>{getStageIcon(candidate.stage)}</span>
-          <span className="capitalize">{candidate.stage}</span>
+        <span className={`inline-flex items-center space-x-1 px-3 py-1.5 text-xs font-bold rounded-full border ${getStageColor(safeStage)}`}>
+          <span>{getStageIcon(safeStage)}</span>
+          <span className="capitalize">{safeStage}</span>
         </span>
       </td>
 
@@ -103,10 +111,10 @@ const CandidateRow = ({ candidate, jobInfo }) => {
       <td className="px-6 py-4">
         <div className="flex items-center space-x-2">
           <div className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-            <span className="text-xs font-bold text-gray-600 dark:text-gray-400">{candidate.experience}</span>
+            <span className="text-xs font-bold text-gray-600 dark:text-gray-400">{safeExperience}</span>
           </div>
           <span className="text-sm font-medium text-gray-900 dark:text-gray-50">
-            {candidate.experience} year{candidate.experience !== 1 ? 's' : ''}
+            {safeExperience} year{safeExperience !== 1 ? 's' : ''}
           </span>
         </div>
       </td>
@@ -114,7 +122,7 @@ const CandidateRow = ({ candidate, jobInfo }) => {
       {/* Applied Date */}
       <td className="px-6 py-4">
         <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-          {formatDate(candidate.appliedDate)}
+          {formatDate(safeAppliedDate)}
         </div>
       </td>
 
@@ -122,7 +130,7 @@ const CandidateRow = ({ candidate, jobInfo }) => {
       <td className="px-6 py-4">
         <div className="flex items-center space-x-2">
           <Link
-            to={`/jobs/${candidate.jobId}`}
+            to={`/jobs/${candidate?.jobId || 1}`}
             className="inline-flex items-center space-x-1 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-colors border border-blue-200 dark:border-blue-800"
           >
             <ExternalLink size={12} />
@@ -130,7 +138,7 @@ const CandidateRow = ({ candidate, jobInfo }) => {
           </Link>
           
           <Link
-            to={`/candidates/${candidate.id}`}
+            to={`/candidates/${candidate?.id || 1}`}
             className="inline-flex items-center space-x-1 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors border border-gray-200 dark:border-gray-600"
           >
             <Eye size={12} />
