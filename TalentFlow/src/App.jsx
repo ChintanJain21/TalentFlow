@@ -57,8 +57,6 @@ function App() {
             <Route path="/assessments/:jobId" element={<AssessmentBuilder />} />
             <Route path="/candidates" element={<CandidatesList />} />
             <Route path="/candidates/:id" element={<CandidateProfile />} />
-            <Route path="/pipeline" element={<KanbanBoard />} />
-            <Route path="/pipeline/:jobId" element={<KanbanBoard />} />
             
             {/* 📊 NEW: Analytics Route */}
             <Route path="/analytics" element={<AnalyticsDashboard />} />
