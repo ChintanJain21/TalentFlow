@@ -12,6 +12,7 @@ const LongText = ({
   if (mode === 'builder') {
     return (
       <div className="space-y-4">
+        {/* Question Header */}
         <div className="flex items-center space-x-2">
           <GripVertical size={16} className="text-gray-400" />
           <span className="text-sm font-medium text-indigo-600 bg-indigo-100 px-2 py-1 rounded">
@@ -19,6 +20,7 @@ const LongText = ({
           </span>
         </div>
 
+        {/* Question Title */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Question Title {question.required && <span className="text-red-500">*</span>}
@@ -27,11 +29,12 @@ const LongText = ({
             type="text"
             value={question.title || ''}
             onChange={(e) => onChange({ ...question, title: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter your question..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            placeholder={!question.title ? 'Enter your question...' : undefined}
           />
         </div>
 
+        {/* Placeholder Text */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Placeholder Text
@@ -39,57 +42,66 @@ const LongText = ({
           <textarea
             value={question.placeholder || ''}
             onChange={(e) => onChange({ ...question, placeholder: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             rows="2"
-            placeholder="Enter placeholder text..."
+            placeholder="e.g., Describe your experience with..."
           />
+          <p className="text-xs text-gray-500 mt-1">This text will appear as a hint to candidates</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Maximum Characters
-            </label>
-            <input
-              type="number"
-              value={question.validation?.maxLength || 500}
-              onChange={(e) => onChange({ 
-                ...question, 
-                validation: { 
-                  ...question.validation, 
-                  maxLength: parseInt(e.target.value) || 500 
-                }
-              })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              min="50"
-              max="5000"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Textarea Rows
-            </label>
-            <input
-              type="number"
-              value={question.rows || 4}
-              onChange={(e) => onChange({ ...question, rows: parseInt(e.target.value) || 4 })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              min="2"
-              max="10"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-2">
+        {/* Character Limit */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Character Limit (optional)
+          </label>
           <input
-            type="checkbox"
-            checked={question.required || false}
-            onChange={(e) => onChange({ ...question, required: e.target.checked })}
-            className="text-blue-600"
+            type="number"
+            min="0"
+            max="5000"
+            value={question.maxLength || ''}
+            onChange={(e) => onChange({ ...question, maxLength: e.target.value ? parseInt(e.target.value) : null })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            placeholder="e.g., 500"
           />
-          <label className="text-sm text-gray-700">Required question</label>
+          <p className="text-xs text-gray-500 mt-1">Leave empty for no limit</p>
         </div>
+
+        {/* Rows Setting */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Text Area Height
+          </label>
+          <select
+            value={question.rows || 4}
+            onChange={(e) => onChange({ ...question, rows: parseInt(e.target.value) })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          >
+            <option value={3}>Small (3 lines)</option>
+            <option value={4}>Medium (4 lines)</option>
+            <option value={6}>Large (6 lines)</option>
+            <option value={8}>Extra Large (8 lines)</option>
+          </select>
+        </div>
+
+        {/* Settings */}
+        <div className="pt-3 border-t border-gray-200">
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={question.required || false}
+              onChange={(e) => onChange({ ...question, required: e.target.checked })}
+              className="text-indigo-600 rounded"
+            />
+            <label className="text-sm text-gray-700">Required question</label>
+          </div>
+        </div>
+
+        {/* Error Display */}
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-600 text-sm">⚠️ {error}</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -97,8 +109,8 @@ const LongText = ({
   // Preview Mode
   if (mode === 'preview') {
     return (
-      <div className="space-y-3">
-        <h4 className="font-medium text-gray-900">
+      <div className="space-y-4">
+        <h4 className="text-lg font-medium text-gray-900">
           {question.title}
           {question.required && <span className="text-red-500 ml-1">*</span>}
         </h4>
@@ -106,52 +118,61 @@ const LongText = ({
         <textarea
           disabled
           rows={question.rows || 4}
-          placeholder={question.placeholder || "Enter your detailed answer..."}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 resize-none"
+          placeholder={question.placeholder || 'Enter your detailed answer...'}
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 resize-none"
         />
         
-        {question.validation?.maxLength && (
-          <p className="text-xs text-gray-500">
-            Maximum {question.validation.maxLength} characters
-          </p>
+        {question.maxLength && (
+          <p className="text-xs text-gray-500">Maximum {question.maxLength} characters</p>
         )}
       </div>
     );
   }
 
-  
-  if (mode === 'runtime' || mode === 'simulation') {
-    const maxLength = question.validation?.maxLength || 500;
-    const currentLength = answer?.length || 0;
+  // Simulation Mode - Interactive
+  if (mode === 'simulation') {
+    const currentLength = answer ? answer.length : 0;
+    const isOverLimit = question.maxLength && currentLength > question.maxLength;
     
     return (
-      <div className="space-y-3">
-        <h4 className="font-medium text-gray-900">
+      <div className="space-y-4">
+        <h4 className="text-lg font-medium text-gray-900">
           {question.title}
           {question.required && <span className="text-red-500 ml-1">*</span>}
         </h4>
         
-        {error && (
-          <p className="text-red-600 text-sm">{error}</p>
-        )}
-        
-        <textarea
-          value={answer || ''}
-          onChange={(e) => onAnswer(e.target.value)}
-          placeholder={question.placeholder || "Enter your detailed answer..."}
-          rows={question.rows || 4}
-          maxLength={maxLength}
-          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none ${
-            error ? 'border-red-300' : 'border-gray-300'
-          }`}
-        />
-        
-        <div className="flex justify-between text-xs text-gray-500">
-          <span>Maximum {maxLength} characters</span>
-          <span className={currentLength > maxLength * 0.9 ? 'text-orange-600' : ''}>
-            {currentLength}/{maxLength}
-          </span>
+        <div className="relative">
+          <textarea
+            value={answer || ''}
+            onChange={(e) => onAnswer(e.target.value)}
+            placeholder={question.placeholder || 'Enter your detailed answer...'}
+            rows={question.rows || 4}
+            maxLength={question.maxLength || undefined}
+            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none transition-all ${
+              isOverLimit 
+                ? 'border-red-300 focus:border-red-500 focus:ring-red-200' 
+                : 'border-gray-300 focus:border-indigo-500'
+            }`}
+          />
+          
+          {question.maxLength && (
+            <div className={`absolute bottom-3 right-3 text-xs ${
+              isOverLimit ? 'text-red-500' : currentLength > question.maxLength * 0.8 ? 'text-orange-500' : 'text-gray-400'
+            }`}>
+              {currentLength}/{question.maxLength}
+            </div>
+          )}
         </div>
+
+        {question.maxLength && (
+          <p className="text-xs text-gray-500">Maximum {question.maxLength} characters</p>
+        )}
+
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-600 text-sm">⚠️ {error}</p>
+          </div>
+        )}
       </div>
     );
   }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Settings, Trash2, Copy, GripVertical, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, Copy, GripVertical, ChevronDown, ChevronUp } from 'lucide-react';
 import QuestionRenderer from './QuestionRenderer';
 
 const SectionBuilder = ({
@@ -40,35 +40,39 @@ const SectionBuilder = ({
                 onBlur={() => setEditingTitle(false)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') setEditingTitle(false);
+                  if (e.key === 'Escape') {
+                    setEditingTitle(false);
+                  }
                 }}
                 className={`text-lg font-medium bg-white border rounded px-2 py-1 ${
                   errors[`section-${section.id}-title`] ? 'border-red-300' : 'border-gray-300'
                 }`}
-                placeholder="Section title..."
+                placeholder="Enter section title..."
                 autoFocus
               />
             ) : (
               <h3 
-                className="text-lg font-medium text-gray-900 cursor-pointer hover:text-blue-600"
+                className="text-lg font-medium text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
                 onClick={() => setEditingTitle(true)}
+                title="Click to edit section title"
               >
                 {section.title || `Section ${sectionIndex + 1}`}
               </h3>
             )}
             
             <span className="text-sm text-gray-500">
-              {section.questions?.length || 0} questions
+              {section.questions?.length || 0} question{section.questions?.length === 1 ? '' : 's'}
             </span>
 
             {errors[`section-${section.id}-title`] && (
-              <span className="text-red-500 text-sm">⚠️</span>
+              <span className="text-red-500 text-sm" title="Section has errors">⚠️</span>
             )}
           </div>
 
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-1 text-gray-400 hover:text-gray-600"
+              className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
               title={isCollapsed ? 'Expand Section' : 'Collapse Section'}
             >
               {isCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
@@ -76,7 +80,7 @@ const SectionBuilder = ({
 
             <button
               onClick={() => setShowQuestionTypes(!showQuestionTypes)}
-              className="flex items-center space-x-2 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="flex items-center space-x-2 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
             >
               <Plus size={14} />
               <span>Add Question</span>
@@ -85,7 +89,7 @@ const SectionBuilder = ({
             {canRemove && (
               <button
                 onClick={onRemoveSection}
-                className="p-1 text-gray-400 hover:text-red-600"
+                className="p-1 text-gray-400 hover:text-red-600 transition-colors"
                 title="Remove Section"
               >
                 <Trash2 size={16} />
@@ -150,7 +154,7 @@ const SectionBuilder = ({
                     {questionIndex + 1}
                   </div>
                   
-                  <div className="ml-6 border border-gray-200 rounded-lg p-4 hover:border-gray-300">
+                  <div className="ml-6 border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
                     <div className="flex items-start justify-between mb-4">
                       <span className={`text-xs font-medium px-2 py-1 rounded ${
                         question.type === 'single-choice' ? 'bg-blue-100 text-blue-700' :
@@ -166,7 +170,7 @@ const SectionBuilder = ({
                       <div className="flex items-center space-x-1">
                         <button
                           onClick={() => onDuplicateQuestion(question.id)}
-                          className="p-1 text-gray-400 hover:text-blue-600"
+                          className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
                           title="Duplicate Question"
                         >
                           <Copy size={14} />
@@ -174,7 +178,7 @@ const SectionBuilder = ({
                         
                         <button
                           onClick={() => onRemoveQuestion(question.id)}
-                          className="p-1 text-gray-400 hover:text-red-600"
+                          className="p-1 text-gray-400 hover:text-red-600 transition-colors"
                           title="Remove Question"
                         >
                           <Trash2 size={14} />
@@ -182,22 +186,36 @@ const SectionBuilder = ({
                       </div>
                     </div>
 
+                    {/* ✅ ENHANCED QuestionRenderer with proper error passing */}
                     <QuestionRenderer
                       question={question}
                       onChange={(updatedQuestion) => onUpdateQuestion(question.id, updatedQuestion)}
                       mode="builder"
-                      errors={errors}
+                      error={errors[`question-${question.id}`]}
                     />
+                    
+                    {/* Question-level errors */}
+                    {errors[`question-${question.id}`] && (
+                      <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-red-600 text-sm">⚠️ {errors[`question-${question.id}`]}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">
-              <p>No questions in this section yet.</p>
+              <div className="mb-4">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Plus size={24} className="text-gray-400" />
+                </div>
+                <p className="font-medium">No questions in this section yet</p>
+                <p className="text-sm">Add questions to start building your assessment</p>
+              </div>
               <button
                 onClick={() => setShowQuestionTypes(true)}
-                className="mt-2 text-blue-600 hover:text-blue-800 font-medium"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
               >
                 Add your first question
               </button>

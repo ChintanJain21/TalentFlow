@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams, Link } from 'react-router-dom'; // Add Link import
 import CandidateFilters from './CandidateFilters';
 import CandidateRow from './CandidateRow';
 import KanbanBoard from './KanbanBoard';
 
-// Stage validation
+// Stage validation (keep existing)
 const getStageOrder = () => ['applied', 'screen', 'tech', 'offer', 'hired'];
 
 const isValidStageTransition = (fromStage, toStage) => {
@@ -29,24 +30,27 @@ const getValidDropTargets = (candidateStage) => {
 };
 
 const CandidatesList = () => {
+  const [searchParams] = useSearchParams(); // Add URL params support
+  
   // Core state
   const [candidates, setCandidates] = useState([]);
+  const [jobs, setJobs] = useState([]); // ✅ NEW: Jobs state
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState('list');
   const [activeCandidate, setActiveCandidate] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, pageSize: 50, total: 0, totalPages: 0 });
   const [allCandidates, setAllCandidates] = useState([]);
   
-  // Filters
-  const [search, setSearch] = useState('');
-  const [stageFilter, setStageFilter] = useState('all');
-  const [jobFilter, setJobFilter] = useState('all');
+  // Filters - ✅ ENHANCED: Support URL params
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [stageFilter, setStageFilter] = useState(searchParams.get('stage') || 'all');
+  const [jobFilter, setJobFilter] = useState(searchParams.get('jobId') || 'all');
   
-  // 🎨 SAVING ANIMATION STATE
+  // Saving animation state (keep existing)
   const [savingCandidate, setSavingCandidate] = useState(null);
   const [savedCandidate, setSavedCandidate] = useState(null);
   
-  // Auto-scroll refs
+  // Auto-scroll refs (keep existing)
   const dragTimeoutRef = useRef(null);
   const scrollContainerRef = useRef(null);
 
@@ -60,7 +64,19 @@ const CandidatesList = () => {
     { value: 'rejected', label: 'Rejected', count: 0, icon: '💔', color: 'bg-red-100 text-red-700' }
   ];
 
-  // Stats calculation
+  // ✅ HELPER FUNCTIONS FOR JOB INFO
+  const getJobInfo = (jobId) => {
+    const job = jobs.find(j => j.id === jobId);
+    return job || { title: 'Unknown Job', department: 'Unknown', location: 'Unknown' };
+  };
+
+  const getFilteredJobTitle = () => {
+    if (jobFilter === 'all') return null;
+    const job = getJobInfo(parseInt(jobFilter));
+    return job.title;
+  };
+
+  // Stats calculation (keep existing)
   const stageStats = useMemo(() => {
     if (!allCandidates?.length) {
       return { all: 0, applied: 0, screen: 0, tech: 0, offer: 0, hired: 0, rejected: 0 };
@@ -76,7 +92,7 @@ const CandidatesList = () => {
 
   const stagesWithCounts = stages.map(stage => ({ ...stage, count: stageStats[stage.value] || 0 }));
 
-  // Kanban data
+  // Kanban data (keep existing)
   const candidatesByStage = useMemo(() => {
     const emptyStructure = { applied: [], screen: [], tech: [], offer: [], hired: [], rejected: [] };
     if (!allCandidates?.length) return emptyStructure;
@@ -100,7 +116,7 @@ const CandidatesList = () => {
     return stageGroups;
   }, [allCandidates, search]);
 
-  // Auto-scroll during drag
+  // Auto-scroll during drag (keep existing)
   const handleAutoScroll = (clientX) => {
     if (!scrollContainerRef.current) return;
     const container = scrollContainerRef.current;
@@ -130,16 +146,35 @@ const CandidatesList = () => {
     }
   };
 
-  // API calls
+  // ✅ ENHANCED API CALLS
   const fetchAllCandidatesForStats = async () => {
     try {
-      const response = await fetch('/api/candidates?page=1&pageSize=2000');
+      let url = '/api/candidates?page=1&pageSize=2000';
+      
+      // ✅ Apply filters to stats
+      if (jobFilter !== 'all') url += `&jobId=${jobFilter}`;
+      
+      const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       setAllCandidates(data.data || []);
     } catch (error) {
       console.error('Error fetching candidates:', error);
       setAllCandidates([]);
+    }
+  };
+
+  // ✅ FETCH JOBS
+  const fetchJobs = async () => {
+    try {
+      const response = await fetch('/api/jobs?pageSize=100');
+      if (response.ok) {
+        const data = await response.json();
+        setJobs(data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching jobs:', error);
+      setJobs([]);
     }
   };
 
@@ -167,7 +202,7 @@ const CandidatesList = () => {
     }
   };
 
-  // 🎨 ENHANCED DRAG HANDLERS WITH ANIMATION
+  // Drag handlers (keep existing)
   const handleDragStart = (event) => {
     if (!event?.active?.id || !allCandidates) return;
     const candidate = allCandidates.find(c => c.id === event.active.id);
@@ -224,10 +259,10 @@ const CandidatesList = () => {
       return;
     }
 
-    // 🎨 START SAVING ANIMATION
+    // Saving animation
     setSavingCandidate(candidate.id);
     
-    // Optimistic update with saving state
+    // Optimistic update
     const optimisticCandidate = { ...candidate, stage: targetStage, _saving: true };
     setAllCandidates(prev => prev.map(c => 
       c.id === active.id ? optimisticCandidate : c
@@ -243,7 +278,7 @@ const CandidatesList = () => {
       if (response.ok) {
         const updated = await response.json();
         
-        // 🎨 SUCCESS ANIMATION
+        // Success animation
         setSavingCandidate(null);
         setSavedCandidate(updated.id);
         
@@ -252,7 +287,7 @@ const CandidatesList = () => {
           c.id === active.id ? { ...updated, _justSaved: true } : c
         ));
 
-        // Clear success animation after 2 seconds
+        // Clear success animation
         setTimeout(() => {
           setSavedCandidate(null);
           setAllCandidates(prev => prev.map(c => 
@@ -261,7 +296,7 @@ const CandidatesList = () => {
         }, 2000);
 
       } else {
-        // 🚫 ERROR - ROLLBACK
+        // Rollback
         setSavingCandidate(null);
         setAllCandidates(prev => prev.map(c => 
           c.id === active.id ? { ...candidate, _saving: false } : c
@@ -269,7 +304,7 @@ const CandidatesList = () => {
         alert('Failed to update candidate stage. Please try again.');
       }
     } catch (error) {
-      // 🚫 ERROR - ROLLBACK
+      // Rollback
       setSavingCandidate(null);
       setAllCandidates(prev => prev.map(c => 
         c.id === active.id ? { ...candidate, _saving: false } : c
@@ -278,10 +313,15 @@ const CandidatesList = () => {
     }
   };
 
-  // Effects
+  // ✅ ENHANCED EFFECTS
   useEffect(() => {
+    fetchJobs(); // Fetch jobs on mount
     fetchAllCandidatesForStats();
   }, []);
+
+  useEffect(() => {
+    fetchAllCandidatesForStats(); // Refetch when job filter changes
+  }, [jobFilter]);
 
   useEffect(() => {
     if (viewMode === 'list') fetchCandidates(1);
@@ -295,14 +335,21 @@ const CandidatesList = () => {
   }, []);
 
   const isKanbanReady = allCandidates?.length > 0 && candidatesByStage;
+  const filteredJobTitle = getFilteredJobTitle();
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Header */}
+      {/* ✅ ENHANCED HEADER */}
       <div className="mb-8 flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Candidates</h1>
-          <p className="text-gray-600">Manage candidate applications ({stageStats.all} total)</p>
+          {filteredJobTitle ? (
+            <p className="text-gray-600">
+              Showing candidates for <span className="font-semibold text-blue-600">{filteredJobTitle}</span> ({stageStats.all} total)
+            </p>
+          ) : (
+            <p className="text-gray-600">Manage candidate applications ({stageStats.all} total)</p>
+          )}
         </div>
         
         {/* View Toggle */}
@@ -324,7 +371,7 @@ const CandidatesList = () => {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* ✅ ENHANCED FILTERS - Pass jobs to CandidateFilters */}
       <CandidateFilters
         search={search}
         setSearch={setSearch}
@@ -332,6 +379,7 @@ const CandidatesList = () => {
         setStageFilter={setStageFilter}
         jobFilter={jobFilter}
         setJobFilter={setJobFilter}
+        jobs={jobs} // ✅ Pass jobs
         stagesWithCounts={stagesWithCounts}
         viewMode={viewMode}
         showStageFilter={viewMode === 'list'}
@@ -357,7 +405,7 @@ const CandidatesList = () => {
         ))}
       </div>
 
-      {/* 🎨 SAVING NOTIFICATION */}
+      {/* Saving & Success Notifications (keep existing) */}
       {savingCandidate && (
         <div className="fixed top-4 right-4 z-50 bg-blue-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center animate-slideIn">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-3"></div>
@@ -365,7 +413,6 @@ const CandidatesList = () => {
         </div>
       )}
 
-      {/* 🎉 SUCCESS NOTIFICATION */}
       {savedCandidate && (
         <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center animate-slideIn">
           <div className="w-4 h-4 rounded-full bg-white flex items-center justify-center mr-3">
@@ -385,7 +432,12 @@ const CandidatesList = () => {
             </div>
           ) : candidates.length === 0 ? (
             <div className="p-8 text-center">
-              <p className="text-gray-600">No candidates found.</p>
+              <p className="text-gray-600">
+                {filteredJobTitle 
+                  ? `No candidates found for ${filteredJobTitle}.`
+                  : 'No candidates found.'
+                }
+              </p>
             </div>
           ) : (
             <>
@@ -393,7 +445,7 @@ const CandidatesList = () => {
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      {['Candidate', 'Stage', 'Experience', 'Applied', 'Actions'].map(header => (
+                      {['Candidate', 'Job Applied', 'Stage', 'Experience', 'Applied', 'Actions'].map(header => (
                         <th key={header} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           {header}
                         </th>
@@ -402,7 +454,11 @@ const CandidatesList = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {candidates.map(candidate => (
-                      <CandidateRow key={candidate.id} candidate={candidate} />
+                      <CandidateRow 
+                        key={candidate.id} 
+                        candidate={candidate} 
+                        jobInfo={getJobInfo(candidate.jobId)} // ✅ Pass job info
+                      />
                     ))}
                   </tbody>
                 </table>
@@ -453,6 +509,8 @@ const CandidatesList = () => {
               scrollContainerRef={scrollContainerRef}
               savingCandidate={savingCandidate}
               savedCandidate={savedCandidate}
+              jobs={jobs} // ✅ Pass jobs to Kanban
+              getJobInfo={getJobInfo} // ✅ Pass helper function
             />
           )}
         </div>

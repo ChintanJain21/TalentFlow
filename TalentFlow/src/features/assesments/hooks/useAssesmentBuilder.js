@@ -17,41 +17,41 @@ const useAssessmentBuilder = (initialAssessment = null) => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
-  // Question type templates
+  // ✅ FIXED: Restore template titles for sidebar, keep empty options only
   const questionTemplates = {
     'single-choice': {
       type: 'single-choice',
-      title: 'Single Choice Question',
+      title: 'Single Choice', // ✅ RESTORED for sidebar display
       required: true,
-      options: ['Option 1', 'Option 2', 'Option 3']
+      options: ['', ''] // ✅ ONLY this stays empty for placeholder fix
     },
     'multi-choice': {
       type: 'multi-choice',
-      title: 'Multiple Choice Question',
+      title: 'Multiple Choice', // ✅ RESTORED for sidebar display
       required: false,
-      options: ['Option 1', 'Option 2', 'Option 3']
+      options: ['', ''] // ✅ ONLY this stays empty for placeholder fix
     },
     'short-text': {
       type: 'short-text',
-      title: 'Short Text Question',
+      title: 'Short Text', // ✅ RESTORED for sidebar display
       required: true,
       validation: { maxLength: 100 }
     },
     'long-text': {
       type: 'long-text',
-      title: 'Long Text Question',
+      title: 'Long Text', // ✅ RESTORED for sidebar display
       required: false,
       validation: { maxLength: 500 }
     },
     'numeric': {
       type: 'numeric',
-      title: 'Numeric Question',
+      title: 'Numeric', // ✅ RESTORED for sidebar display
       required: true,
       validation: { min: 0, max: 100 }
     },
     'file-upload': {
       type: 'file-upload',
-      title: 'File Upload Question',
+      title: 'File Upload', // ✅ RESTORED for sidebar display
       required: false,
       validation: { maxSize: '5MB', allowedTypes: ['pdf', 'doc', 'docx'] }
     }
@@ -117,7 +117,7 @@ const useAssessmentBuilder = (initialAssessment = null) => {
     const newQuestion = {
       ...template,
       id: `q-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      title: template.title,
+      title : '', // ✅ FIXED: Use template title for new questions
     };
 
     setAssessment(prev => ({
@@ -233,14 +233,15 @@ const useAssessmentBuilder = (initialAssessment = null) => {
       section.questions.forEach((question, questionIndex) => {
         const questionKey = `question-${question.id}`;
         
-        if (!question.title.trim()) {
+        if (!question.title || !question.title.trim()) {
           newErrors[`${questionKey}-title`] = 'Question title is required';
         }
 
         // Type-specific validation
         if (['single-choice', 'multi-choice'].includes(question.type)) {
-          if (!question.options || question.options.length < 2) {
-            newErrors[`${questionKey}-options`] = 'At least 2 options are required';
+          const validOptions = question.options ? question.options.filter(opt => opt && opt.trim()) : [];
+          if (validOptions.length < 2) {
+            newErrors[`${questionKey}-options`] = 'At least 2 options with content are required';
           }
         }
       });
@@ -251,36 +252,37 @@ const useAssessmentBuilder = (initialAssessment = null) => {
   }, [assessment]);
 
   // Save assessment
-  const saveAssessment = useCallback(async () => {
-    if (!validateAssessment()) {
-      console.log('Assessment validation failed:', errors);
-      return false;
+  // ✅ SIMPLE FIX - Just use your existing MSW handlers
+const saveAssessment = useCallback(async () => {
+  if (!validateAssessment()) {
+    return false;
+  }
+
+  setLoading(true);
+  try {
+    // Your MSW handler expects PUT /api/assessments/:jobId
+    const response = await fetch(`/api/assessments/${assessment.jobId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(assessment)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
 
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/assessments/${assessment.jobId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(assessment)
-      });
+    const savedAssessment = await response.json();
+    setAssessment(savedAssessment);
+    setIsDirty(false);
+    return true;
+  } catch (error) {
+    console.error('Save failed:', error);
+    return false;
+  } finally {
+    setLoading(false);
+  }
+}, [assessment, validateAssessment]);
 
-      if (!response.ok) {
-        throw new Error('Failed to save assessment');
-      }
-
-      const savedAssessment = await response.json();
-      setAssessment(savedAssessment);
-      setIsDirty(false);
-      console.log('✅ Assessment saved successfully');
-      return true;
-    } catch (error) {
-      console.error('❌ Failed to save assessment:', error);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  }, [assessment, validateAssessment, errors]);
 
   // Reset to initial state
   const resetAssessment = useCallback(() => {
