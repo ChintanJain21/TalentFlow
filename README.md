@@ -102,32 +102,22 @@ TalentFlow/
 ### Installation
 ```sh
 npm install
-# or
-yarn install
 ```
 
 ### Development
 ```sh
 npm run dev
-# or
-yarn dev
+
 ```
 
 ### Build
 ```sh
 npm run build
-# or
-yarn build
+
 ```
 
-### Lint
-```sh
-npm run lint
-# or
-yarn lint
-```
 
----
+
 
 ## Usage
 - **Job Board**: Manage job postings, reorder with drag-and-drop, archive/unarchive jobs.
