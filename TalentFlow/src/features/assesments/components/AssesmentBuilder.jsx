@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Plus, ArrowLeft, FileText, User, BarChart3, Eye, TestTube, ChevronRight, Clock, CheckCircle, AlertCircle, Users } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { db } from '../../../db/database';
+import { db } from '../../../db/database'; // ✅ ALREADY IMPORTED
 import QuestionBuilder from './QuestionBuilder';
 import AssessmentPreview from './AssesmentPreview';
 
@@ -31,22 +31,32 @@ const AssessmentBuilder = () => {
     }
   }, [jobId, searchParams]);
 
+  // ✅ FIXED - IndexedDB data fetching
   const fetchData = async () => {
     try {
-      // Fetch job
-      const jobResponse = await fetch(`/api/jobs/${jobId}`);
-      if (!jobResponse.ok) {
+      const parsedJobId = parseInt(jobId);
+      if (isNaN(parsedJobId)) {
         navigate('/jobs');
         return;
       }
-      const jobData = await jobResponse.json();
+
+      console.log('🔍 Fetching assessment data from IndexedDB:', parsedJobId);
+
+      // Fetch job from IndexedDB
+      const jobData = await db.jobs.get(parsedJobId);
+      if (!jobData) {
+        console.warn('❌ Job not found:', parsedJobId);
+        navigate('/jobs');
+        return;
+      }
       setJob(jobData);
 
-      // Fetch candidates from Dexie
+      // Fetch candidates from IndexedDB
       const candidatesData = await db.candidates
         .where('jobId')
-        .equals(parseInt(jobId))
+        .equals(parsedJobId)
         .toArray();
+      console.log('✅ Candidates loaded:', candidatesData.length);
       setCandidates(candidatesData);
 
       // Handle force create mode
@@ -57,41 +67,51 @@ const AssessmentBuilder = () => {
         return;
       }
 
-      // Try to fetch existing assessment
+      // Try to fetch existing assessment from IndexedDB
       try {
-        const assessmentResponse = await fetch(`/api/assessments/${jobId}`);
-        if (assessmentResponse.ok) {
-          const assessmentData = await assessmentResponse.json();
+        const assessmentData = await db.assessments
+          .where('jobId')
+          .equals(parsedJobId)
+          .first();
+
+        if (assessmentData) {
+          console.log('✅ Assessment found:', assessmentData.title);
           setAssessment(assessmentData);
           setMode('edit');
           
-          await fetchSubmissions(assessmentData.id || parseInt(jobId));
+          await fetchSubmissions(assessmentData.id);
         } else {
+          console.log('ℹ️ No assessment found for job:', parsedJobId);
           setAssessment(null);
           setMode('create');
         }
-      } catch {
+      } catch (assessmentError) {
+        console.error('❌ Error fetching assessment:', assessmentError);
         setAssessment(null);
         setMode('create');
       }
       
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('❌ Error fetching data:', error);
       navigate('/jobs');
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ FIXED - IndexedDB submissions fetching
   const fetchSubmissions = async (assessmentId) => {
     try {
+      console.log('🔍 Fetching submissions for assessment:', assessmentId);
       const submissionsData = await db.submissions
         .where('assessmentId')
         .equals(assessmentId)
         .toArray();
+      console.log('✅ Submissions loaded:', submissionsData.length);
       setSubmissions(submissionsData);
     } catch (error) {
-      console.error('Error fetching submissions:', error);
+      console.error('❌ Error fetching submissions:', error);
+      setSubmissions([]);
     }
   };
 
@@ -135,18 +155,23 @@ const AssessmentBuilder = () => {
   const handleSimulationComplete = async () => {
     setMode('edit');
     if (assessment) {
-      await fetchSubmissions(assessment.id || parseInt(jobId));
+      await fetchSubmissions(assessment.id);
     }
   };
 
+  // ✅ FIXED - IndexedDB candidate lookup
   const handleViewResponses = async () => {
     if (submissions.length === 0) return;
     
     const latestSubmission = submissions[submissions.length - 1];
     
     let candidateDetails = null;
-    if (latestSubmission.candidateId) {
-      candidateDetails = await db.candidates.get(latestSubmission.candidateId);
+    if (latestSubmission.candidateId && typeof latestSubmission.candidateId === 'number') {
+      try {
+        candidateDetails = await db.candidates.get(latestSubmission.candidateId);
+      } catch (error) {
+        console.warn('❌ Could not fetch candidate details:', error);
+      }
     }
     
     setSelectedSubmissionForReview({
@@ -240,7 +265,7 @@ const AssessmentBuilder = () => {
                 </div>
                 <div className="flex items-center space-x-1">
                   <BarChart3 className="w-4 h-4" />
-                  <span>{Math.floor(submission.timeSpent / 60)}m {submission.timeSpent % 60}s</span>
+                  <span>{Math.floor((submission.timeSpent || 0) / 60)}m {(submission.timeSpent || 0) % 60}s</span>
                 </div>
               </div>
             </div>
@@ -260,7 +285,7 @@ const AssessmentBuilder = () => {
 
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {allQuestions.map((question, index) => {
-              const answer = submission.answers[question.id];
+              const answer = submission.answers?.[question.id];
               const hasAnswer = answer && (Array.isArray(answer) ? answer.length > 0 : answer.toString().trim() !== '');
               
               return (
@@ -388,14 +413,14 @@ const AssessmentBuilder = () => {
                   <div className="flex items-center space-x-4">
                     <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                       <span className="text-white font-bold text-lg">
-                        {candidate.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                        {candidate.name ? candidate.name.split(' ').map(n => n[0]).join('').slice(0, 2) : 'NA'}
                       </span>
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-50">{candidate.name}</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{candidate.email}</p>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-50">{candidate.name || 'Unknown'}</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{candidate.email || 'No email'}</p>
                       <div className="flex items-center space-x-3 mt-1 text-sm text-gray-500 dark:text-gray-500">
-                        <span>{candidate.experience} years exp</span>
+                        <span>{candidate.experience || 0} years exp</span>
                         <span>•</span>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           candidate.stage === 'hired' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
@@ -403,10 +428,10 @@ const AssessmentBuilder = () => {
                           candidate.stage === 'offer' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300' :
                           'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
                         }`}>
-                          {candidate.stage}
+                          {candidate.stage || 'applied'}
                         </span>
                         <span>•</span>
-                        <span>Applied {new Date(candidate.appliedDate).toLocaleDateString()}</span>
+                        <span>Applied {new Date(candidate.appliedDate || candidate.createdAt).toLocaleDateString()}</span>
                       </div>
                     </div>
                   </div>
@@ -416,7 +441,7 @@ const AssessmentBuilder = () => {
                     className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-colors font-medium"
                   >
                     <TestTube size={16} />
-                    <span>Test as {candidate.name.split(' ')[0]}</span>
+                    <span>Test as {candidate.name ? candidate.name.split(' ')[0] : 'User'}</span>
                     <ChevronRight size={16} />
                   </button>
                 </div>
@@ -444,7 +469,7 @@ const AssessmentBuilder = () => {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">
               {isForceCreateMode ? 'Create Assessment' : 'Assessment'} for {job?.title}
             </h1>
-            <p className="text-gray-600 dark:text-gray-400">{job?.company} • {job?.location}</p>
+            <p className="text-gray-600 dark:text-gray-400">{job?.department || job?.company} • {job?.location}</p>
             {isForceCreateMode && (
               <div className="flex items-center space-x-2 mt-1">
                 <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -610,14 +635,14 @@ const AssessmentBuilder = () => {
                   {candidates.slice(0, 5).map(candidate => (
                     <div key={candidate.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
                       <div>
-                        <p className="text-sm font-bold text-gray-900 dark:text-gray-50">{candidate.name}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{candidate.stage}</p>
+                        <p className="text-sm font-bold text-gray-900 dark:text-gray-50">{candidate.name || 'Unknown'}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{candidate.stage || 'applied'}</p>
                       </div>
                       <button
                         onClick={() => handleTestAsCandidate(candidate)}
                         className="text-xs px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
                       >
-                        Test as {candidate.name.split(' ')[0]}
+                        Test as {candidate.name ? candidate.name.split(' ')[0] : 'User'}
                       </button>
                     </div>
                   ))}
@@ -676,7 +701,7 @@ const AssessmentBuilder = () => {
                       </div>
                       <div className="text-right">
                         <span className="text-sm text-purple-600 dark:text-purple-400 font-medium">
-                          {Math.floor(submission.timeSpent / 60)}m {submission.timeSpent % 60}s
+                          {Math.floor((submission.timeSpent || 0) / 60)}m {(submission.timeSpent || 0) % 60}s
                         </span>
                         <button
                           onClick={() => {

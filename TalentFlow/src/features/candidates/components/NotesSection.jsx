@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, AtSign, Users, MessageSquare, Plus, Clock, User } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { db } from '../../../db/database'; // ✅ ADD THIS IMPORT
 
 const NotesSection = ({ candidate, setCandidate, currentStage, formatFullDate }) => {
   const { isDark } = useTheme();
@@ -79,7 +80,7 @@ const NotesSection = ({ candidate, setCandidate, currentStage, formatFullDate })
     }
   };
 
-  // Add note function
+  // ✅ FIXED - Add note function with IndexedDB
   const addNote = async () => {
     if (!newNote.trim()) return;
     
@@ -107,22 +108,30 @@ const NotesSection = ({ candidate, setCandidate, currentStage, formatFullDate })
         type: 'user_note'
       };
 
-      // Update candidate with new note
-      setCandidate(prev => ({
-        ...prev,
-        notes: [...(prev.notes || []), noteData]
-      }));
+      // ✅ Update candidate in IndexedDB
+      const updatedCandidate = {
+        ...candidate,
+        notes: [...(candidate.notes || []), noteData],
+        updatedAt: new Date().toISOString()
+      };
+
+      await db.candidates.update(candidate.id, {
+        notes: updatedCandidate.notes,
+        updatedAt: updatedCandidate.updatedAt
+      });
+
+      // Update local state
+      setCandidate(updatedCandidate);
       
       // Clear form
       setNewNote('');
       setShowMentions(false);
       setMentionQuery('');
 
-      // Here you would also send to API if needed
-      // await fetch(`/api/candidates/${candidate.id}/notes`, { ... })
+      console.log('✅ Note added successfully to candidate:', candidate.id);
       
     } catch (error) {
-      console.error('Error adding note:', error);
+      console.error('❌ Error adding note:', error);
       alert('Failed to add note. Please try again.');
     } finally {
       setAddingNote(false);

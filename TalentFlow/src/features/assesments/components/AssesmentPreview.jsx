@@ -1,6 +1,8 @@
+
 import { useState } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle, Clock, AlertCircle, User, Play, Eye, TestTube } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { db } from '../../../db/database'; // ✅ ADD THIS IMPORT
 import QuestionRenderer from './QuestionRenderer';
 import useFormValidation from '../hooks/useFormValidation';
 
@@ -8,7 +10,8 @@ const AssessmentPreview = ({
   assessment, 
   onBack, 
   mode = 'preview', // 'preview' | 'simulation'
-  candidateInfo = null
+  candidateInfo = null,
+  onSubmit // ✅ ADD THIS PROP
 }) => {
   const { isDark } = useTheme();
   const [currentSection, setCurrentSection] = useState(0);
@@ -30,6 +33,7 @@ const AssessmentPreview = ({
     clearError(questionId);
   };
 
+  // ✅ FIXED - IndexedDB submission
   const handleSubmit = async () => {
     // Skip validation for preview mode
     if (mode !== 'preview') {
@@ -42,34 +46,52 @@ const AssessmentPreview = ({
 
     setSubmitting(true);
     
+    const timeSpent = Math.floor((Date.now() - startTime) / 1000); // in seconds
     const submissionData = {
-      assessmentId: assessment.id,
+      assessmentId: assessment.id || assessment.jobId, // Use jobId as fallback
+      jobId: assessment.jobId,
       answers,
-      submittedAt: new Date().toISOString(),
-      timeSpent: Date.now() - startTime,
+      completedAt: new Date().toISOString(),
+      timeSpent,
+      candidateId: candidateInfo?.id || null,
       candidateInfo: candidateInfo || {
         name: 'HR Test User',
         email: 'hr@company.com',
         note: 'HR testing assessment'
-      }
+      },
+      submissionType: mode === 'simulation' ? 'mock_test' : 'preview_test',
+      createdAt: new Date().toISOString()
     };
 
     try {
-      const response = await fetch(`/api/assessments/${assessment.jobId}/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(submissionData)
-      });
+      console.log('💾 Saving submission to IndexedDB:', submissionData);
 
-      if (!response.ok) throw new Error('Failed to submit assessment');
-
-      const result = await response.json();
+      // ✅ Save to IndexedDB submissions table
+      const submissionId = await db.submissions.add(submissionData);
       
+      console.log('✅ Submission saved with ID:', submissionId);
+
+      // Calculate mock score (for display purposes)
+      const totalQuestions = assessment.sections?.reduce((total, section) => 
+        total + (section.questions?.length || 0), 0) || 0;
+      const answeredQuestions = Object.keys(answers).length;
+      const mockScore = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
+
       const message = mode === 'simulation' && candidateInfo
-        ? `🎭 Simulation Complete!\n\nCandidate: ${candidateInfo.name}\nScore: ${result.score}%\nTime: ${Math.round((Date.now() - startTime) / 1000 / 60)} min`
-        : `✅ Assessment test completed!\n\nScore: ${result.score}%`;
+        ? `🎭 Simulation Complete!\n\nCandidate: ${candidateInfo.name}\nCompletion: ${mockScore}%\nTime: ${Math.round(timeSpent / 60)} min ${timeSpent % 60}s`
+        : `✅ Assessment test completed!\n\nCompletion: ${mockScore}%\nTime: ${Math.round(timeSpent / 60)} min ${timeSpent % 60}s`;
       
       alert(message);
+      
+      // ✅ Call onSubmit callback if provided
+      if (onSubmit) {
+        onSubmit({
+          ...submissionData,
+          id: submissionId,
+          score: mockScore
+        });
+      }
+      
       onBack?.();
       
     } catch (error) {
@@ -282,7 +304,7 @@ const AssessmentPreview = ({
             <div>
               <h4 className="font-bold text-green-800 dark:text-green-300 mb-1">Simulation Mode Active</h4>
               <p className="text-sm text-green-700 dark:text-green-400 leading-relaxed">
-                Testing as <strong>{candidateInfo.name}</strong> ({candidateInfo.experience} years experience). 
+                Testing as <strong>{candidateInfo.name}</strong> ({candidateInfo.experience || 0} years experience). 
                 All responses will be stored as if this candidate completed the assessment.
               </p>
             </div>
