@@ -45,7 +45,7 @@ TalentFlow is a modern, modular recruitment and assessment platform for HR teams
 ---
 
 ## Screenshots
-> _Add your own screenshots here!_
+> 
 
 - ![Job Board](./screenshots/jobboard.png)
 - ![Candidate Kanban](./screenshots/candidatekanban.png)
