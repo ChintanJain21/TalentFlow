@@ -4,6 +4,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { db } from '../../../db/database'; // ✅ ADD THIS IMPORT
 import Modal from '../../../components/ui/Modal';
 import JobForm from './JobForm';
 import SortableJobCard from './SortableJobCard';
@@ -35,44 +36,54 @@ const JobsBoard = () => {
     setTimeout(() => setNotification(null), type === 'error' ? 5000 : 3000);
   };
 
-  // Simplified fetchJobs
+  // ✅ FIXED - IndexedDB only fetchJobs
   const fetchJobs = async (page = 1, search = '', status = '', pageSize = 12) => {
     setLoading(true);
     try {
-      console.log(`🔍 fetchJobs: page=${page}, search="${search}", status="${status}"`);
+      console.log(`🔍 fetchJobs: page=${page}, search="${search}", status="${status}" - USING INDEXEDDB`);
       
-      const params = new URLSearchParams({
-        page: page.toString(),
-        pageSize: pageSize.toString(),
-        ...(search && { search }),
-        ...(status && { status }),
-        sort: 'order',
-        _t: Date.now().toString()
-      });
-
-      const response = await fetch(`/api/jobs?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch jobs');
+      // Get all jobs from IndexedDB
+      let query = db.jobs.orderBy('order');
+      let allJobs = await query.toArray();
       
-      const data = await response.json();
-      console.log(`✅ fetchJobs result:`, { page: data.page, total: data.total, dataLength: data.data?.length });
+      // Apply status filter
+      if (status && status !== '' && status !== 'all') {
+        allJobs = allJobs.filter(job => job.status === status);
+      }
       
-      setJobs(data.data || []);
-      setPagination({
-        page: data.page,
-        pageSize: pageSize,
-        total: data.total,
-        totalPages: data.totalPages
-      });
+      // Apply search filter
+      if (search && search.trim() !== '') {
+        const searchLower = search.toLowerCase();
+        allJobs = allJobs.filter(job => 
+          job.title.toLowerCase().includes(searchLower) ||
+          job.description.toLowerCase().includes(searchLower) ||
+          job.department.toLowerCase().includes(searchLower) ||
+          (job.skills && job.skills.some(skill => skill.toLowerCase().includes(searchLower)))
+        );
+      }
+      
+      // Calculate pagination
+      const total = allJobs.length;
+      const totalPages = Math.ceil(total / pageSize);
+      const startIndex = (page - 1) * pageSize;
+      const paginatedJobs = allJobs.slice(startIndex, startIndex + pageSize);
+      
+      console.log(`✅ fetchJobs result: ${paginatedJobs.length} jobs (page ${page}/${totalPages})`);
+      
+      setJobs(paginatedJobs);
+      setPagination({ page, pageSize, total, totalPages });
       
     } catch (error) {
       console.error('❌ fetchJobs error:', error);
-      showNotification('error', 'Failed to load jobs. Please try again.');
+      showNotification('error', 'Failed to load jobs from database.');
+      setJobs([]);
+      setPagination({ page: 1, pageSize: 12, total: 0, totalPages: 0 });
     } finally {
       setLoading(false);
     }
   };
 
-  // Drag end handler
+  // ✅ FIXED - IndexedDB reorder
   const handleDragEnd = async (event) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -86,36 +97,47 @@ const JobsBoard = () => {
     showNotification('info', 'Reordering...');
 
     try {
-      const response = await fetch(`/api/jobs/${active.id}/reorder`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fromOrder: oldIndex, toOrder: newIndex })
+      // Update order in IndexedDB
+      const updatedJobs = optimisticJobs.map((job, index) => ({
+        ...job,
+        order: index + 1
+      }));
+      
+      await db.transaction('rw', db.jobs, async () => {
+        for (const job of updatedJobs) {
+          await db.jobs.update(job.id, { order: job.order });
+        }
       });
-
-      if (!response.ok) throw new Error('Reorder failed');
+      
       showNotification('success', 'Jobs reordered successfully!');
     } catch (error) {
-      setJobs(jobs);
+      console.error('Reorder failed:', error);
+      setJobs(jobs); // Revert changes
       showNotification('error', 'Reorder failed. Changes reverted.');
     }
   };
 
-  // Job creation
+  // ✅ FIXED - IndexedDB job creation
   const handleCreateJob = async (jobData) => {
     setFormLoading(true);
     try {
-      const response = await fetch('/api/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(jobData)
-      });
-
-      if (!response.ok) throw new Error('Failed to create job');
+      // Get max order
+      const maxOrderJob = await db.jobs.orderBy('order').last();
+      const newOrder = (maxOrderJob?.order || 0) + 1;
+      
+      const newJob = {
+        ...jobData,
+        order: newOrder,
+        createdAt: new Date().toISOString()
+      };
+      
+      await db.jobs.add(newJob);
       
       setShowCreateModal(false);
       await fetchJobs(pagination.page, filters.search, filters.status, reorderMode ? 50 : 12);
       showNotification('success', 'Job created successfully!');
     } catch (error) {
+      console.error('Create job failed:', error);
       showNotification('error', 'Failed to create job. Please try again.');
       throw error;
     } finally {
@@ -123,22 +145,20 @@ const JobsBoard = () => {
     }
   };
 
-  // Job editing
+  // ✅ FIXED - IndexedDB job editing
   const handleEditJob = async (jobData) => {
     setFormLoading(true);
     try {
-      const response = await fetch(`/api/jobs/${editingJob.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(jobData)
+      await db.jobs.update(editingJob.id, {
+        ...jobData,
+        updatedAt: new Date().toISOString()
       });
-
-      if (!response.ok) throw new Error('Failed to update job');
       
       setEditingJob(null);
       await fetchJobs(pagination.page, filters.search, filters.status, reorderMode ? 50 : 12);
       showNotification('success', 'Job updated successfully!');
     } catch (error) {
+      console.error('Update job failed:', error);
       showNotification('error', 'Failed to update job. Please try again.');
       throw error;
     } finally {
@@ -146,21 +166,19 @@ const JobsBoard = () => {
     }
   };
 
-  // Job archive/unarchive
+  // ✅ FIXED - IndexedDB archive/unarchive
   const handleArchiveToggle = async (job) => {
     const newStatus = job.status === 'active' ? 'archived' : 'active';
     try {
-      const response = await fetch(`/api/jobs/${job.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
+      await db.jobs.update(job.id, { 
+        status: newStatus,
+        updatedAt: new Date().toISOString()
       });
-
-      if (!response.ok) throw new Error('Failed to update job');
       
       await fetchJobs(pagination.page, filters.search, filters.status, reorderMode ? 50 : 12);
       showNotification('success', `Job ${newStatus === 'active' ? 'activated' : 'archived'} successfully!`);
     } catch (error) {
+      console.error('Archive toggle failed:', error);
       showNotification('error', 'Failed to update job status.');
     }
   };
@@ -407,53 +425,15 @@ const JobsBoard = () => {
               </div>
             )}
 
-            {/* Enhanced Pagination */}
+            {/* ✅ FIXED - IndexedDB pagination */}
             {pagination.totalPages > 1 && !reorderMode && (
               <div className="flex justify-center mt-12">
                 <div className="flex items-center space-x-2">
                   {/* Previous Button */}
                   {pagination.page > 1 && (
                     <button
-                      onClick={async () => {
-                        const newPage = pagination.page - 1;
-                        console.log(`◀️ PREV: ${pagination.page} → ${newPage}`);
-                        setLoading(true);
-                        
-                        try {
-                          const params = new URLSearchParams({
-                            page: newPage.toString(),
-                            pageSize: '12',
-                            ...(filters.search && { search: filters.search }),
-                            ...(filters.status && { status: filters.status }),
-                            sort: 'order',
-                            _t: Date.now().toString()
-                          });
-
-                          const response = await fetch(`/api/jobs?${params}`);
-                          const data = await response.json();
-                          
-                          console.log(`✅ PREV RESULT:`, { 
-                            page: data.page, 
-                            dataLength: data.data?.length,
-                            jobIds: data.data?.map(j => j.id)
-                          });
-                          
-                          setJobs(data.data || []);
-                          setPagination({
-                            page: data.page,
-                            pageSize: 12,
-                            total: data.total,
-                            totalPages: data.totalPages
-                          });
-                        } catch (error) {
-                          console.error('❌ PREV ERROR:', error);
-                          showNotification('error', 'Failed to load previous page');
-                        } finally {
-                          setLoading(false);
-                        }
-                      }}
-                      disabled={loading}
-                      className="w-12 h-12 rounded-xl font-bold transition-all bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 flex items-center justify-center hover:shadow-md disabled:opacity-50"
+                      onClick={() => fetchJobs(pagination.page - 1, filters.search, filters.status, 12)}
+                      className="w-12 h-12 rounded-xl font-bold transition-all bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 flex items-center justify-center hover:shadow-md"
                     >
                       <ChevronLeft size={18} />
                     </button>
@@ -485,49 +465,8 @@ const JobsBoard = () => {
                     return (
                       <button
                         key={`page-${pageNum}`}
-                        onClick={async () => {
-                          if (pageNum === pagination.page || loading) return;
-                          
-                          console.log(`🔘 PAGE ${pageNum} CLICKED (from ${pagination.page})`);
-                          setLoading(true);
-                          
-                          try {
-                            const params = new URLSearchParams({
-                              page: pageNum.toString(),
-                              pageSize: '12',
-                              ...(filters.search && { search: filters.search }),
-                              ...(filters.status && { status: filters.status }),
-                              sort: 'order',
-                              _t: Date.now().toString()
-                            });
-
-                            const response = await fetch(`/api/jobs?${params}`);
-                            const data = await response.json();
-                            
-                            console.log(`✅ PAGE ${pageNum} RESULT:`, {
-                              page: data.page,
-                              total: data.total,
-                              dataLength: data.data?.length,
-                              firstJob: data.data?.[0]?.title,
-                              jobIds: data.data?.map(j => j.id)
-                            });
-                            
-                            setJobs(data.data || []);
-                            setPagination({
-                              page: data.page,
-                              pageSize: 12,
-                              total: data.total,
-                              totalPages: data.totalPages
-                            });
-                          } catch (error) {
-                            console.error(`❌ PAGE ${pageNum} ERROR:`, error);
-                            showNotification('error', `Failed to load page ${pageNum}`);
-                          } finally {
-                            setLoading(false);
-                          }
-                        }}
-                        disabled={loading}
-                        className={`w-12 h-12 rounded-xl font-bold transition-all disabled:opacity-50 border-2 ${
+                        onClick={() => fetchJobs(pageNum, filters.search, filters.status, 12)}
+                        className={`w-12 h-12 rounded-xl font-bold transition-all border-2 ${
                           isCurrent
                             ? 'bg-blue-600 dark:bg-blue-500 text-white border-blue-600 dark:border-blue-500 shadow-lg'
                             : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600 hover:shadow-md'
@@ -541,46 +480,8 @@ const JobsBoard = () => {
                   {/* Next Button */}
                   {pagination.page < pagination.totalPages && (
                     <button
-                      onClick={async () => {
-                        const newPage = pagination.page + 1;
-                        console.log(`▶️ NEXT: ${pagination.page} → ${newPage}`);
-                        setLoading(true);
-                        
-                        try {
-                          const params = new URLSearchParams({
-                            page: newPage.toString(),
-                            pageSize: '12',
-                            ...(filters.search && { search: filters.search }),
-                            ...(filters.status && { status: filters.status }),
-                            sort: 'order',
-                            _t: Date.now().toString()
-                          });
-
-                          const response = await fetch(`/api/jobs?${params}`);
-                          const data = await response.json();
-                          
-                          console.log(`✅ NEXT RESULT:`, { 
-                            page: data.page, 
-                            dataLength: data.data?.length,
-                            jobIds: data.data?.map(j => j.id)
-                          });
-                          
-                          setJobs(data.data || []);
-                          setPagination({
-                            page: data.page,
-                            pageSize: 12,
-                            total: data.total,
-                            totalPages: data.totalPages
-                          });
-                        } catch (error) {
-                          console.error('❌ NEXT ERROR:', error);
-                          showNotification('error', 'Failed to load next page');
-                        } finally {
-                          setLoading(false);
-                        }
-                      }}
-                      disabled={loading}
-                      className="w-12 h-12 rounded-xl font-bold transition-all bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 flex items-center justify-center hover:shadow-md disabled:opacity-50"
+                      onClick={() => fetchJobs(pagination.page + 1, filters.search, filters.status, 12)}
+                      className="w-12 h-12 rounded-xl font-bold transition-all bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 flex items-center justify-center hover:shadow-md"
                     >
                       <ChevronRight size={18} />
                     </button>
