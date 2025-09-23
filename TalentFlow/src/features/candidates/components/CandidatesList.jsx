@@ -311,6 +311,7 @@ const CandidatesList = () => {
     }
   };
 
+    // ✅ FIXED - Add timeline support to handleDragEnd
   const handleDragEnd = async (event) => {
     // Cleanup
     if (dragTimeoutRef.current) clearTimeout(dragTimeoutRef.current);
@@ -363,9 +364,39 @@ const CandidatesList = () => {
     ));
 
     try {
-      // ✅ FIXED - Update in IndexedDB
+      // ✅ ADD: Helper function to get stage display names
+      const getStageDisplayName = (stage) => {
+        const stageNames = {
+          'applied': 'Applied',
+          'screen': 'Screening',
+          'tech': 'Technical Interview',
+          'offer': 'Offer',
+          'hired': 'Hired',
+          'rejected': 'Rejected'
+        };
+        return stageNames[stage] || stage;
+      };
+
+      // ✅ ADD: Create timeline entry for stage change
+      const timelineEntry = {
+        id: Date.now(),
+        type: 'stage_change',
+        title: `Moved to ${getStageDisplayName(targetStage)}`,
+        description: `Stage changed from ${getStageDisplayName(candidate.stage)} to ${getStageDisplayName(targetStage)}`,
+        timestamp: new Date().toISOString(),
+        user: 'HR Team', // You can make this dynamic based on logged-in user
+        metadata: {
+          previousStage: candidate.stage,
+          newStage: targetStage,
+          changedBy: 'HR Team',
+          changeMethod: 'drag_drop'
+        }
+      };
+
+      // ✅ FIXED - Update in IndexedDB with timeline
       await db.candidates.update(active.id, {
         stage: targetStage,
+        timeline: [...(candidate.timeline || []), timelineEntry], // ✅ ADD timeline entry
         updatedAt: new Date().toISOString()
       });
 
@@ -381,9 +412,10 @@ const CandidatesList = () => {
         c.id === active.id ? { ...updatedCandidate, _justSaved: true } : c
       ));
 
-      console.log('✅ Candidate stage updated:', { 
+      console.log('✅ Candidate stage updated with timeline entry:', { 
         id: active.id, 
-        newStage: targetStage 
+        newStage: targetStage,
+        timelineEntry
       });
 
       // Clear success animation
@@ -405,6 +437,7 @@ const CandidatesList = () => {
       alert('Failed to update candidate stage. Please try again.');
     }
   };
+
 
   // Effects
   useEffect(() => {

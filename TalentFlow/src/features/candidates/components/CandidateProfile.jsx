@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Phone, FileText, ExternalLink, Github, Linkedin, MapPin, DollarSign, Clock, Award } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { db } from '../../../db/database'; // ✅ ADD THIS IMPORT
+import { db } from '../../../db/database';
 import NotesSection from './NotesSection';
 
 // Stage validation logic
@@ -87,7 +87,7 @@ const CandidateProfile = () => {
     }
   ];
 
-  // ✅ FIXED - IndexedDB fetch candidate
+  // Fetch candidate from IndexedDB
   const fetchCandidate = async () => {
     try {
       const candidateId = parseInt(id);
@@ -115,7 +115,7 @@ const CandidateProfile = () => {
     }
   };
 
-  // ✅ FIXED - IndexedDB stage update
+  // ✅ FIXED - Add timeline support to updateStage
   const updateStage = async (newStage) => {
     if (!candidate) return;
 
@@ -147,9 +147,41 @@ const CandidateProfile = () => {
         to: newStage 
       });
 
-      // Update in IndexedDB
+      // ✅ ADD: Helper function to get stage display names
+      const getStageDisplayName = (stage) => {
+        const stageNames = {
+          'applied': 'Applied',
+          'screen': 'Screening',
+          'tech': 'Technical Interview',
+          'offer': 'Offer',
+          'hired': 'Hired',
+          'rejected': 'Rejected'
+        };
+        return stageNames[stage] || stage;
+      };
+
+      // ✅ ADD: Create timeline entry for stage change
+      const timelineEntry = {
+        id: Date.now(),
+        type: 'stage_change',
+        title: `Stage changed to ${getStageDisplayName(newStage)}`,
+        description: `Moved from ${getStageDisplayName(candidate.stage)} to ${getStageDisplayName(newStage)}`,
+        timestamp: new Date().toISOString(),
+        user: 'HR Team', // You can make this dynamic
+        stage: newStage,
+        note: `Candidate stage updated to ${getStageDisplayName(newStage)}`,
+        metadata: {
+          previousStage: candidate.stage,
+          newStage: newStage,
+          changedBy: 'HR Team',
+          changeMethod: 'profile_actions'
+        }
+      };
+
+      // ✅ FIXED - Update in IndexedDB with timeline
       await db.candidates.update(candidate.id, {
         stage: newStage,
+        timeline: [...(candidate.timeline || []), timelineEntry], // ✅ ADD timeline entry
         updatedAt: new Date().toISOString()
       });
 
@@ -160,7 +192,7 @@ const CandidateProfile = () => {
       setSavedStage(newStage);
       setCandidate(updatedCandidate);
       
-      console.log('✅ Candidate stage updated successfully');
+      console.log('✅ Candidate stage updated successfully with timeline entry:', timelineEntry);
       
       // Clear success animation after 2 seconds
       setTimeout(() => setSavedStage(null), 2000);
@@ -444,32 +476,92 @@ const CandidateProfile = () => {
               </div>
             )}
 
-            {/* Timeline */}
+            {/* ✅ UPDATED Timeline - Enhanced display */}
             {activeTab === 'timeline' && (
               <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-200 dark:border-gray-700 transition-colors">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-gray-50 mb-6">📅 Activity Timeline</h3>
                 <div className="space-y-4">
                   {candidate.timeline?.length > 0 ? (
-                    candidate.timeline.map((event) => {
-                      const eventStage = getStageInfo(event.stage);
-                      return (
-                        <div key={event.id} className="flex items-start p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center mr-4 ${eventStage.bg} ${eventStage.text} border ${eventStage.border}`}>
-                            {eventStage.icon}
-                          </div>
-                          <div className="flex-1">
-                            <div className="font-medium text-gray-900 dark:text-gray-50">{event.note}</div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                              {formatFullDate(event.timestamp)} • by {event.user}
+                    // ✅ Sort timeline entries by timestamp (newest first)
+                    candidate.timeline
+                      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                      .map((event, index) => {
+                        // ✅ Handle different event types
+                        const getEventIcon = (type) => {
+                          switch (type) {
+                            case 'stage_change': return '🔄';
+                            case 'note_added': return '📝';
+                            case 'interview_scheduled': return '📅';
+                            case 'assessment_completed': return '✅';
+                            default: return '📋';
+                          }
+                        };
+
+                        const getEventColor = (type) => {
+                          switch (type) {
+                            case 'stage_change': return 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-700';
+                            case 'note_added': return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700';
+                            case 'interview_scheduled': return 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-700';
+                            case 'assessment_completed': return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-700';
+                            default: return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-600';
+                          }
+                        };
+
+                        return (
+                          <div key={event.id || index} className="flex items-start p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center mr-4 border ${getEventColor(event.type)}`}>
+                              <span className="text-lg">{getEventIcon(event.type)}</span>
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="font-bold text-gray-900 dark:text-gray-50">
+                                  {event.title || event.note || 'Activity Update'}
+                                </h4>
+                                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                                  {formatFullDate(event.timestamp)}
+                                </span>
+                              </div>
+                              
+                              {/* ✅ Show description if available */}
+                              {event.description && (
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                  {event.description}
+                                </p>
+                              )}
+                              
+                              {/* ✅ Show stage change details */}
+                              {event.type === 'stage_change' && event.metadata && (
+                                <div className="flex items-center space-x-2 text-xs mt-2">
+                                  <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded border border-red-200 dark:border-red-700">
+                                    {event.metadata.previousStage}
+                                  </span>
+                                  <span className="text-gray-400">→</span>
+                                  <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded border border-green-200 dark:border-green-700">
+                                    {event.metadata.newStage}
+                                  </span>
+                                  {event.metadata.changedBy && (
+                                    <span className="text-gray-500 dark:text-gray-400 ml-2">
+                                      by {event.metadata.changedBy}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {/* ✅ Show user info if available */}
+                              {event.user && (
+                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                  Updated by: <span className="font-medium">{event.user}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
-                        </div>
-                      );
-                    })
+                        );
+                      })
                   ) : (
                     <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                       <div className="text-4xl mb-4">📅</div>
-                      <p>No timeline events yet.</p>
+                      <h4 className="font-bold text-gray-900 dark:text-gray-50 mb-2">No timeline events yet</h4>
+                      <p className="text-sm">Timeline entries will appear here when candidate status changes.</p>
                     </div>
                   )}
                 </div>
