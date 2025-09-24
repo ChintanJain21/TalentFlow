@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Plus, ArrowLeft, FileText, User, BarChart3, Eye, TestTube, ChevronRight, Clock, CheckCircle, AlertCircle, Users } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { db } from '../../../db/database'; // ✅ ALREADY IMPORTED
+import { db } from '../../../db/database';
 import QuestionBuilder from './QuestionBuilder';
 import AssessmentPreview from './AssesmentPreview';
 
@@ -31,7 +31,17 @@ const AssessmentBuilder = () => {
     }
   }, [jobId, searchParams]);
 
-  // ✅ FIXED - IndexedDB data fetching
+  // ✅ SIMPLE - Try API first, fallback to IndexedDB
+  const fetchWithFallback = async (apiCall, fallbackCall) => {
+    try {
+      return await apiCall();
+    } catch (error) {
+      console.warn('API failed, using IndexedDB fallback:', error.message);
+      return await fallbackCall();
+    }
+  };
+
+  // ✅ UPDATED - fetchData with MSW + IndexedDB fallback
   const fetchData = async () => {
     try {
       const parsedJobId = parseInt(jobId);
@@ -40,24 +50,85 @@ const AssessmentBuilder = () => {
         return;
       }
 
-      console.log('🔍 Fetching assessment data from IndexedDB:', parsedJobId);
+      console.log('🔍 Fetching assessment data:', parsedJobId);
 
-      // Fetch job from IndexedDB
-      const jobData = await db.jobs.get(parsedJobId);
-      if (!jobData) {
-        console.warn('❌ Job not found:', parsedJobId);
-        navigate('/jobs');
-        return;
-      }
-      setJob(jobData);
+      const result = await fetchWithFallback(
+        // Try MSW API first
+        async () => {
+          // Fetch job details
+          const jobResponse = await fetch(`/api/jobs/${parsedJobId}`);
+          if (jobResponse.status === 404) {
+            throw new Error('Job not found');
+          }
+          if (!jobResponse.ok) throw new Error(`HTTP ${jobResponse.status}`);
 
-      // Fetch candidates from IndexedDB
-      const candidatesData = await db.candidates
-        .where('jobId')
-        .equals(parsedJobId)
-        .toArray();
-      console.log('✅ Candidates loaded:', candidatesData.length);
-      setCandidates(candidatesData);
+          // Fetch candidates for this job
+          const candidatesResponse = await fetch(`/api/candidates?jobId=${parsedJobId}&page=1&pageSize=2000`);
+          const candidatesData = candidatesResponse.ok ? await candidatesResponse.json() : { data: [] };
+
+          let assessmentData = null;
+          if (!isForceCreateMode) {
+            // Try to fetch existing assessment
+            const assessmentResponse = await fetch(`/api/assessments/${parsedJobId}`);
+            if (assessmentResponse.ok) {
+              assessmentData = await assessmentResponse.json();
+            }
+          }
+
+          const jobData = await jobResponse.json();
+          const jobCandidates = candidatesData.data || [];
+
+          console.log('✅ Assessment data loaded via MSW API:', {
+            job: jobData.title,
+            candidates: jobCandidates.length,
+            assessment: !!assessmentData
+          });
+
+          return {
+            job: jobData,
+            candidates: jobCandidates,
+            assessment: assessmentData
+          };
+        },
+        // Fallback to IndexedDB
+        async () => {
+          // Fetch job from IndexedDB
+          const jobData = await db.jobs.get(parsedJobId);
+          if (!jobData) {
+            throw new Error('Job not found');
+          }
+
+          // Fetch candidates from IndexedDB
+          const candidatesData = await db.candidates
+            .where('jobId')
+            .equals(parsedJobId)
+            .toArray();
+
+          let assessmentData = null;
+          if (!isForceCreateMode) {
+            // Try to fetch existing assessment from IndexedDB
+            assessmentData = await db.assessments
+              .where('jobId')
+              .equals(parsedJobId)
+              .first();
+          }
+
+          console.log('✅ Assessment data loaded from IndexedDB:', {
+            job: jobData.title,
+            candidates: candidatesData.length,
+            assessment: !!assessmentData
+          });
+
+          return {
+            job: jobData,
+            candidates: candidatesData,
+            assessment: assessmentData
+          };
+        }
+      );
+
+      setJob(result.job);
+      setCandidates(result.candidates);
 
       // Handle force create mode
       if (isForceCreateMode) {
@@ -67,26 +138,13 @@ const AssessmentBuilder = () => {
         return;
       }
 
-      // Try to fetch existing assessment from IndexedDB
-      try {
-        const assessmentData = await db.assessments
-          .where('jobId')
-          .equals(parsedJobId)
-          .first();
-
-        if (assessmentData) {
-          console.log('✅ Assessment found:', assessmentData.title);
-          setAssessment(assessmentData);
-          setMode('edit');
-          
-          await fetchSubmissions(assessmentData.id);
-        } else {
-          console.log('ℹ️ No assessment found for job:', parsedJobId);
-          setAssessment(null);
-          setMode('create');
-        }
-      } catch (assessmentError) {
-        console.error('❌ Error fetching assessment:', assessmentError);
+      if (result.assessment) {
+        console.log('✅ Assessment found:', result.assessment.title);
+        setAssessment(result.assessment);
+        setMode('edit');
+        await fetchSubmissions(result.assessment.id);
+      } else {
+        console.log('ℹ️ No assessment found for job:', parsedJobId);
         setAssessment(null);
         setMode('create');
       }
@@ -99,16 +157,35 @@ const AssessmentBuilder = () => {
     }
   };
 
-  // ✅ FIXED - IndexedDB submissions fetching
+  // ✅ UPDATED - fetchSubmissions with MSW + IndexedDB fallback
   const fetchSubmissions = async (assessmentId) => {
     try {
       console.log('🔍 Fetching submissions for assessment:', assessmentId);
-      const submissionsData = await db.submissions
-        .where('assessmentId')
-        .equals(assessmentId)
-        .toArray();
-      console.log('✅ Submissions loaded:', submissionsData.length);
-      setSubmissions(submissionsData);
+
+      const result = await fetchWithFallback(
+        // Try MSW API first
+        async () => {
+          // Note: This endpoint may not exist in MSW, but we try it for completeness
+          const response = await fetch(`/api/assessments/${jobId}/submissions`);
+          if (response.ok) {
+            const data = await response.json();
+            console.log('✅ Submissions loaded via MSW API:', data.length);
+            return data;
+          }
+          throw new Error('No submissions API');
+        },
+        // Fallback to IndexedDB
+        async () => {
+          const submissionsData = await db.submissions
+            .where('assessmentId')
+            .equals(assessmentId)
+            .toArray();
+          console.log('✅ Submissions loaded from IndexedDB:', submissionsData.length);
+          return submissionsData;
+        }
+      );
+
+      setSubmissions(result);
     } catch (error) {
       console.error('❌ Error fetching submissions:', error);
       setSubmissions([]);
@@ -159,7 +236,7 @@ const AssessmentBuilder = () => {
     }
   };
 
-  // ✅ FIXED - IndexedDB candidate lookup
+  // ✅ UPDATED - handleViewResponses with MSW + IndexedDB fallback
   const handleViewResponses = async () => {
     if (submissions.length === 0) return;
     
@@ -168,7 +245,20 @@ const AssessmentBuilder = () => {
     let candidateDetails = null;
     if (latestSubmission.candidateId && typeof latestSubmission.candidateId === 'number') {
       try {
-        candidateDetails = await db.candidates.get(latestSubmission.candidateId);
+        candidateDetails = await fetchWithFallback(
+          // Try MSW API first
+          async () => {
+            const response = await fetch(`/api/candidates/${latestSubmission.candidateId}`);
+            if (response.ok) {
+              return await response.json();
+            }
+            throw new Error('Candidate not found via API');
+          },
+          // Fallback to IndexedDB
+          async () => {
+            return await db.candidates.get(latestSubmission.candidateId);
+          }
+        );
       } catch (error) {
         console.warn('❌ Could not fetch candidate details:', error);
       }

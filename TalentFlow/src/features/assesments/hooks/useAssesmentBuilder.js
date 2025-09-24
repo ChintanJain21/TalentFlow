@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { db } from '../../../db/database';
 
@@ -24,26 +23,36 @@ const useAssessmentBuilder = (initialAssessment = null) => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
-  // ✅ FIXED - Empty question templates
+  // ✅ SIMPLE - Try API first, fallback to IndexedDB
+  const fetchWithFallback = async (apiCall, fallbackCall) => {
+    try {
+      return await apiCall();
+    } catch (error) {
+      console.warn('API failed, using IndexedDB fallback:', error.message);
+      return await fallbackCall();
+    }
+  };
+
+  // Question templates (unchanged - perfect as-is)
   const questionTemplates = {
     'single-choice': {
       title: 'Single Choice',
       type: 'single-choice',
-      question: '', // ✅ Empty instead of placeholder text
-      options: ['', '', ''], // ✅ Empty options instead of "Option 1", etc.
+      question: '',
+      options: ['', '', ''],
       required: false
     },
     'multi-choice': {
       title: 'Multiple Choice',
       type: 'multi-choice',
-      question: '', // ✅ Empty instead of placeholder text
-      options: ['', '', ''], // ✅ Empty options instead of "Option 1", etc.
+      question: '',
+      options: ['', '', ''],
       required: false
     },
     'short-text': {
       title: 'Short Text',
       type: 'short-text',
-      question: '', // ✅ Empty instead of placeholder text
+      question: '',
       placeholder: 'Enter your answer...',
       required: false,
       maxLength: 100
@@ -51,7 +60,7 @@ const useAssessmentBuilder = (initialAssessment = null) => {
     'long-text': {
       title: 'Long Text',
       type: 'long-text',
-      question: '', // ✅ Empty instead of placeholder text
+      question: '',
       placeholder: 'Enter your detailed answer...',
       required: false,
       maxLength: 1000
@@ -59,7 +68,7 @@ const useAssessmentBuilder = (initialAssessment = null) => {
     'numeric': {
       title: 'Numeric',
       type: 'numeric',
-      question: '', // ✅ Empty instead of placeholder text
+      question: '',
       placeholder: 'Enter a number...',
       required: false,
       min: null,
@@ -68,7 +77,7 @@ const useAssessmentBuilder = (initialAssessment = null) => {
     'file-upload': {
       title: 'File Upload',
       type: 'file-upload',
-      question: '', // ✅ Empty instead of placeholder text
+      question: '',
       acceptedTypes: ['.pdf', '.doc', '.docx'],
       maxSize: 5,
       required: false
@@ -84,13 +93,13 @@ const useAssessmentBuilder = (initialAssessment = null) => {
     }
   }, [assessment, initialAssessment]);
 
-  // Save assessment to IndexedDB
+  // ✅ UPDATED - saveAssessment with MSW + IndexedDB fallback
   const saveAssessment = useCallback(async () => {
     setLoading(true);
     setErrors({});
 
     try {
-      console.log('💾 Saving assessment to IndexedDB:', assessment);
+      console.log('💾 Saving assessment:', assessment.title);
 
       // Validate assessment
       const validationErrors = validateAssessment(assessment);
@@ -105,31 +114,71 @@ const useAssessmentBuilder = (initialAssessment = null) => {
         updatedAt: new Date().toISOString()
       };
 
-      let savedId;
+      const result = await fetchWithFallback(
+        // Try MSW API first
+        async () => {
+          const isUpdate = assessment.id && assessment.id !== 'temp';
+          const url = isUpdate ? `/api/assessments/${assessment.jobId}` : `/api/assessments`;
+          const method = isUpdate ? 'PUT' : 'POST';
 
-      if (assessment.id) {
-        // Update existing assessment
-        console.log('📝 Updating existing assessment:', assessment.id);
-        await db.assessments.update(assessment.id, assessmentData);
-        savedId = assessment.id;
-      } else {
-        // Create new assessment
-        console.log('🆕 Creating new assessment');
-        delete assessmentData.id; // Remove null id
-        savedId = await db.assessments.add(assessmentData);
-        console.log('✅ New assessment created with ID:', savedId);
+          const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(assessmentData),
+          });
+
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          
+          const savedAssessment = await response.json();
+          console.log('✅ Assessment saved via MSW API:', savedAssessment.title);
+          return { 
+            success: true, 
+            id: savedAssessment.id, 
+            assessment: savedAssessment 
+          };
+        },
+        // Fallback to IndexedDB
+        async () => {
+          let savedId;
+
+          if (assessment.id) {
+            // Update existing assessment
+            console.log('📝 Updating existing assessment:', assessment.id);
+            await db.assessments.update(assessment.id, assessmentData);
+            savedId = assessment.id;
+          } else {
+            // Create new assessment
+            console.log('🆕 Creating new assessment');
+            const dataToSave = { ...assessmentData };
+            delete dataToSave.id; // Remove null id
+            savedId = await db.assessments.add(dataToSave);
+            console.log('✅ New assessment created with ID:', savedId);
+          }
+
+          const savedAssessment = await db.assessments.get(savedId);
+          console.log('✅ Assessment saved via IndexedDB');
+          return { 
+            success: true, 
+            id: savedId, 
+            assessment: savedAssessment 
+          };
+        }
+      );
+
+      if (result.success) {
+        // Update local state
+        setAssessment(prev => ({
+          ...prev,
+          id: result.id,
+          updatedAt: result.assessment?.updatedAt || assessmentData.updatedAt
+        }));
+
+        setIsDirty(false);
+        console.log('✅ Assessment saved successfully:', result.id);
+        return true;
       }
 
-      // Update local state with saved ID
-      setAssessment(prev => ({
-        ...prev,
-        id: savedId,
-        updatedAt: assessmentData.updatedAt
-      }));
-
-      setIsDirty(false);
-      console.log('✅ Assessment saved successfully:', savedId);
-      return true;
+      return false;
 
     } catch (error) {
       console.error('❌ Error saving assessment:', error);
@@ -140,7 +189,7 @@ const useAssessmentBuilder = (initialAssessment = null) => {
     }
   }, [assessment]);
 
-  // Validation function
+  // Validation function (unchanged - perfect as-is)
   const validateAssessment = (assessment) => {
     const errors = {};
 
@@ -162,7 +211,7 @@ const useAssessmentBuilder = (initialAssessment = null) => {
           errors[`section-${section.id}-questions`] = `Section ${index + 1} must have at least one question`;
         } else {
           section.questions.forEach((question) => {
-            // ✅ FIXED - Don't require question title initially, but validate on save
+            // Don't require question title initially, but validate on save
             if (!question.title?.trim() && !question.question?.trim()) {
               errors[`question-${question.id}`] = 'Question text is required';
             }
@@ -182,12 +231,12 @@ const useAssessmentBuilder = (initialAssessment = null) => {
     return errors;
   };
 
-  // Update assessment
+  // Update assessment (unchanged - perfect as-is)
   const updateAssessment = useCallback((updates) => {
     setAssessment(prev => ({ ...prev, ...updates }));
   }, []);
 
-  // Section operations
+  // Section operations (unchanged - perfect as-is)
   const addSection = useCallback(() => {
     const newSection = {
       id: Date.now(),
@@ -217,7 +266,7 @@ const useAssessmentBuilder = (initialAssessment = null) => {
     }));
   }, []);
 
-  // ✅ FIXED - Question operations with empty values
+  // Question operations (unchanged - perfect as-is)
   const addQuestion = useCallback((sectionId, questionType) => {
     const template = questionTemplates[questionType];
     if (!template) {
@@ -227,10 +276,10 @@ const useAssessmentBuilder = (initialAssessment = null) => {
 
     const newQuestion = {
       id: Date.now(),
-      title: '', // ✅ Empty title instead of template title
+      title: '',
       type: questionType,
-      question: '', // ✅ Empty question text
-      ...(template.options ? { options: ['', '', ''] } : {}), // ✅ Empty options for choice questions
+      question: '',
+      ...(template.options ? { options: ['', '', ''] } : {}),
       ...(template.placeholder ? { placeholder: template.placeholder } : {}),
       ...(template.maxLength ? { maxLength: template.maxLength } : {}),
       ...(template.acceptedTypes ? { acceptedTypes: template.acceptedTypes } : {}),
@@ -311,7 +360,7 @@ const useAssessmentBuilder = (initialAssessment = null) => {
     }));
   }, []);
 
-  // Get statistics
+  // Get statistics (unchanged - perfect as-is)
   const getStats = useCallback(() => {
     const totalSections = assessment.sections.length;
     const totalQuestions = assessment.sections.reduce((total, section) => 

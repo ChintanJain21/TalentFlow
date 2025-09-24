@@ -4,7 +4,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { db } from '../../../db/database'; // ✅ ADD THIS IMPORT
+import { db } from '../../../db/database';
 import Modal from '../../../components/ui/Modal';
 import JobForm from './JobForm';
 import SortableJobCard from './SortableJobCard';
@@ -36,46 +36,91 @@ const JobsBoard = () => {
     setTimeout(() => setNotification(null), type === 'error' ? 5000 : 3000);
   };
 
-  // ✅ FIXED - IndexedDB only fetchJobs
+  // ✅ SIMPLE - Try API first, fallback to IndexedDB
+  const fetchWithFallback = async (apiCall, fallbackCall) => {
+    try {
+      return await apiCall();
+    } catch (error) {
+      console.warn('API failed, using IndexedDB fallback:', error.message);
+      return await fallbackCall();
+    }
+  };
+
+  // ✅ UPDATED - fetchJobs with MSW + IndexedDB fallback
   const fetchJobs = async (page = 1, search = '', status = '', pageSize = 12) => {
     setLoading(true);
     try {
-      console.log(`🔍 fetchJobs: page=${page}, search="${search}", status="${status}" - USING INDEXEDDB`);
+      console.log(`🔍 fetchJobs: page=${page}, search="${search}", status="${status}"`);
       
-      // Get all jobs from IndexedDB
-      let query = db.jobs.orderBy('order');
-      let allJobs = await query.toArray();
-      
-      // Apply status filter
-      if (status && status !== '' && status !== 'all') {
-        allJobs = allJobs.filter(job => job.status === status);
-      }
-      
-      // Apply search filter
-      if (search && search.trim() !== '') {
-        const searchLower = search.toLowerCase();
-        allJobs = allJobs.filter(job => 
-          job.title.toLowerCase().includes(searchLower) ||
-          job.description.toLowerCase().includes(searchLower) ||
-          job.department.toLowerCase().includes(searchLower) ||
-          (job.skills && job.skills.some(skill => skill.toLowerCase().includes(searchLower)))
-        );
-      }
-      
-      // Calculate pagination
-      const total = allJobs.length;
-      const totalPages = Math.ceil(total / pageSize);
-      const startIndex = (page - 1) * pageSize;
-      const paginatedJobs = allJobs.slice(startIndex, startIndex + pageSize);
-      
-      console.log(`✅ fetchJobs result: ${paginatedJobs.length} jobs (page ${page}/${totalPages})`);
-      
-      setJobs(paginatedJobs);
-      setPagination({ page, pageSize, total, totalPages });
+      const result = await fetchWithFallback(
+        // Try MSW API first
+        async () => {
+          const searchParams = new URLSearchParams({
+            page: page.toString(),
+            pageSize: pageSize.toString(),
+          });
+
+          if (search) searchParams.append('search', search);
+          if (status && status !== 'all') searchParams.append('status', status);
+
+          const response = await fetch(`/api/jobs?${searchParams}`);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+          const data = await response.json();
+          console.log('✅ Jobs loaded via MSW API:', data.data?.length || 0);
+
+          return {
+            jobs: data.data || [],
+            pagination: { 
+              page, 
+              pageSize, 
+              total: data.total || 0, 
+              totalPages: data.totalPages || 0
+            }
+          };
+        },
+        // Fallback to IndexedDB
+        async () => {
+          let query = db.jobs.orderBy('order');
+          let allJobs = await query.toArray();
+          
+          // Apply status filter
+          if (status && status !== '' && status !== 'all') {
+            allJobs = allJobs.filter(job => job.status === status);
+          }
+          
+          // Apply search filter
+          if (search && search.trim() !== '') {
+            const searchLower = search.toLowerCase();
+            allJobs = allJobs.filter(job => 
+              job.title.toLowerCase().includes(searchLower) ||
+              job.description.toLowerCase().includes(searchLower) ||
+              job.department.toLowerCase().includes(searchLower) ||
+              (job.skills && job.skills.some(skill => skill.toLowerCase().includes(searchLower)))
+            );
+          }
+          
+          // Calculate pagination
+          const total = allJobs.length;
+          const totalPages = Math.ceil(total / pageSize);
+          const startIndex = (page - 1) * pageSize;
+          const paginatedJobs = allJobs.slice(startIndex, startIndex + pageSize);
+          
+          console.log('✅ Jobs loaded from IndexedDB:', paginatedJobs.length);
+          
+          return {
+            jobs: paginatedJobs,
+            pagination: { page, pageSize, total, totalPages }
+          };
+        }
+      );
+
+      setJobs(result.jobs);
+      setPagination(result.pagination);
       
     } catch (error) {
       console.error('❌ fetchJobs error:', error);
-      showNotification('error', 'Failed to load jobs from database.');
+      showNotification('error', 'Failed to load jobs.');
       setJobs([]);
       setPagination({ page: 1, pageSize: 12, total: 0, totalPages: 0 });
     } finally {
@@ -83,7 +128,7 @@ const JobsBoard = () => {
     }
   };
 
-  // ✅ FIXED - IndexedDB reorder
+  // ✅ UPDATED - handleDragEnd with MSW + IndexedDB fallback
   const handleDragEnd = async (event) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -97,17 +142,42 @@ const JobsBoard = () => {
     showNotification('info', 'Reordering...');
 
     try {
-      // Update order in IndexedDB
-      const updatedJobs = optimisticJobs.map((job, index) => ({
-        ...job,
-        order: index + 1
-      }));
-      
-      await db.transaction('rw', db.jobs, async () => {
-        for (const job of updatedJobs) {
-          await db.jobs.update(job.id, { order: job.order });
+      const reorderData = {
+        fromOrder: jobs[oldIndex].order,
+        toOrder: jobs[newIndex].order
+      };
+
+      await fetchWithFallback(
+        // Try MSW API first
+        async () => {
+          const response = await fetch(`/api/jobs/${active.id}/reorder`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(reorderData),
+          });
+
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          
+          console.log('✅ Job reordered via MSW API');
+          return await response.json();
+        },
+        // Fallback to IndexedDB
+        async () => {
+          const updatedJobs = optimisticJobs.map((job, index) => ({
+            ...job,
+            order: index + 1
+          }));
+          
+          await db.transaction('rw', db.jobs, async () => {
+            for (const job of updatedJobs) {
+              await db.jobs.update(job.id, { order: job.order });
+            }
+          });
+          
+          console.log('✅ Job reordered via IndexedDB');
+          return updatedJobs;
         }
-      });
+      );
       
       showNotification('success', 'Jobs reordered successfully!');
     } catch (error) {
@@ -117,21 +187,40 @@ const JobsBoard = () => {
     }
   };
 
-  // ✅ FIXED - IndexedDB job creation
+  // ✅ UPDATED - handleCreateJob with MSW + IndexedDB fallback
   const handleCreateJob = async (jobData) => {
     setFormLoading(true);
     try {
-      // Get max order
-      const maxOrderJob = await db.jobs.orderBy('order').last();
-      const newOrder = (maxOrderJob?.order || 0) + 1;
-      
-      const newJob = {
-        ...jobData,
-        order: newOrder,
-        createdAt: new Date().toISOString()
-      };
-      
-      await db.jobs.add(newJob);
+      await fetchWithFallback(
+        // Try MSW API first
+        async () => {
+          const response = await fetch('/api/jobs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(jobData),
+          });
+
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          
+          console.log('✅ Job created via MSW API');
+          return await response.json();
+        },
+        // Fallback to IndexedDB
+        async () => {
+          const maxOrderJob = await db.jobs.orderBy('order').last();
+          const newOrder = (maxOrderJob?.order || 0) + 1;
+          
+          const newJob = {
+            ...jobData,
+            order: newOrder,
+            createdAt: new Date().toISOString()
+          };
+          
+          await db.jobs.add(newJob);
+          console.log('✅ Job created via IndexedDB');
+          return newJob;
+        }
+      );
       
       setShowCreateModal(false);
       await fetchJobs(pagination.page, filters.search, filters.status, reorderMode ? 50 : 12);
@@ -145,14 +234,35 @@ const JobsBoard = () => {
     }
   };
 
-  // ✅ FIXED - IndexedDB job editing
+  // ✅ UPDATED - handleEditJob with MSW + IndexedDB fallback
   const handleEditJob = async (jobData) => {
     setFormLoading(true);
     try {
-      await db.jobs.update(editingJob.id, {
-        ...jobData,
-        updatedAt: new Date().toISOString()
-      });
+      await fetchWithFallback(
+        // Try MSW API first
+        async () => {
+          const response = await fetch(`/api/jobs/${editingJob.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(jobData),
+          });
+
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          
+          console.log('✅ Job updated via MSW API');
+          return await response.json();
+        },
+        // Fallback to IndexedDB
+        async () => {
+          await db.jobs.update(editingJob.id, {
+            ...jobData,
+            updatedAt: new Date().toISOString()
+          });
+          
+          console.log('✅ Job updated via IndexedDB');
+          return await db.jobs.get(editingJob.id);
+        }
+      );
       
       setEditingJob(null);
       await fetchJobs(pagination.page, filters.search, filters.status, reorderMode ? 50 : 12);
@@ -166,14 +276,38 @@ const JobsBoard = () => {
     }
   };
 
-  // ✅ FIXED - IndexedDB archive/unarchive
+  // ✅ UPDATED - handleArchiveToggle with MSW + IndexedDB fallback
   const handleArchiveToggle = async (job) => {
     const newStatus = job.status === 'active' ? 'archived' : 'active';
     try {
-      await db.jobs.update(job.id, { 
-        status: newStatus,
-        updatedAt: new Date().toISOString()
-      });
+      await fetchWithFallback(
+        // Try MSW API first
+        async () => {
+          const response = await fetch(`/api/jobs/${job.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              status: newStatus,
+              updatedAt: new Date().toISOString()
+            }),
+          });
+
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          
+          console.log('✅ Job status updated via MSW API');
+          return await response.json();
+        },
+        // Fallback to IndexedDB
+        async () => {
+          await db.jobs.update(job.id, { 
+            status: newStatus,
+            updatedAt: new Date().toISOString()
+          });
+          
+          console.log('✅ Job status updated via IndexedDB');
+          return await db.jobs.get(job.id);
+        }
+      );
       
       await fetchJobs(pagination.page, filters.search, filters.status, reorderMode ? 50 : 12);
       showNotification('success', `Job ${newStatus === 'active' ? 'activated' : 'archived'} successfully!`);
@@ -425,7 +559,7 @@ const JobsBoard = () => {
               </div>
             )}
 
-            {/* ✅ FIXED - IndexedDB pagination */}
+            {/* Enhanced Pagination */}
             {pagination.totalPages > 1 && !reorderMode && (
               <div className="flex justify-center mt-12">
                 <div className="flex items-center space-x-2">

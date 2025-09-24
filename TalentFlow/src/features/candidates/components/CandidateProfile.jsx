@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Phone, FileText, ExternalLink, Github, Linkedin, MapPin, DollarSign, Clock, Award } from 'lucide-react';
+import { ArrowLeft, Phone, FileText, Github, Linkedin, Clock, Award } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { db } from '../../../db/database';
 import NotesSection from './NotesSection';
@@ -87,7 +87,17 @@ const CandidateProfile = () => {
     }
   ];
 
-  // Fetch candidate from IndexedDB
+  // ✅ SIMPLE - Try API first, fallback to IndexedDB
+  const fetchWithFallback = async (apiCall, fallbackCall) => {
+    try {
+      return await apiCall();
+    } catch (error) {
+      console.warn('API failed, using IndexedDB fallback:', error.message);
+      return await fallbackCall();
+    }
+  };
+
+  // ✅ SIMPLE - Fetch candidate with production safety
   const fetchCandidate = async () => {
     try {
       const candidateId = parseInt(id);
@@ -97,16 +107,32 @@ const CandidateProfile = () => {
         return;
       }
 
-      console.log('🔍 Fetching candidate from IndexedDB:', candidateId);
-      const candidateData = await db.candidates.get(candidateId);
-      
-      if (candidateData) {
-        console.log('✅ Candidate loaded:', candidateData.name);
-        setCandidate(candidateData);
-      } else {
-        console.warn('❌ Candidate not found:', candidateId);
-        setCandidate(null);
-      }
+      const result = await fetchWithFallback(
+        // Try MSW API first
+        async () => {
+          const response = await fetch(`/api/candidates/${candidateId}`);
+          if (response.status === 404) {
+            return null; // Candidate not found
+          }
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          
+          const candidateData = await response.json();
+          console.log('✅ Candidate loaded via MSW API:', candidateData.name);
+          return candidateData;
+        },
+        // Fallback to IndexedDB
+        async () => {
+          const candidateData = await db.candidates.get(candidateId);
+          if (candidateData) {
+            console.log('✅ Candidate loaded from IndexedDB:', candidateData.name);
+          } else {
+            console.warn('❌ Candidate not found:', candidateId);
+          }
+          return candidateData;
+        }
+      );
+
+      setCandidate(result);
     } catch (error) {
       console.error('❌ Error fetching candidate:', error);
       setCandidate(null);
@@ -115,7 +141,7 @@ const CandidateProfile = () => {
     }
   };
 
-  // ✅ FIXED - Add timeline support to updateStage
+  // ✅ SIMPLE - Update stage with production safety
   const updateStage = async (newStage) => {
     if (!candidate) return;
 
@@ -147,7 +173,7 @@ const CandidateProfile = () => {
         to: newStage 
       });
 
-      // ✅ ADD: Helper function to get stage display names
+      // Helper function to get stage display names
       const getStageDisplayName = (stage) => {
         const stageNames = {
           'applied': 'Applied',
@@ -160,7 +186,7 @@ const CandidateProfile = () => {
         return stageNames[stage] || stage;
       };
 
-      // ✅ ADD: Create timeline entry for stage change
+      // Create timeline entry for stage change
       const timelineEntry = {
         id: Date.now(),
         type: 'stage_change',
@@ -178,16 +204,39 @@ const CandidateProfile = () => {
         }
       };
 
-      // ✅ FIXED - Update in IndexedDB with timeline
-      await db.candidates.update(candidate.id, {
-        stage: newStage,
-        timeline: [...(candidate.timeline || []), timelineEntry], // ✅ ADD timeline entry
-        updatedAt: new Date().toISOString()
-      });
+      const updatedCandidate = await fetchWithFallback(
+        // Try MSW API first
+        async () => {
+          const response = await fetch(`/api/candidates/${candidate.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              stage: newStage,
+              timeline: [...(candidate.timeline || []), timelineEntry],
+              updatedAt: new Date().toISOString()
+            }),
+          });
 
-      // Get updated candidate
-      const updatedCandidate = await db.candidates.get(candidate.id);
-      
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          
+          const result = await response.json();
+          console.log('✅ Candidate stage updated via MSW API with timeline entry');
+          return result;
+        },
+        // Fallback to IndexedDB
+        async () => {
+          await db.candidates.update(candidate.id, {
+            stage: newStage,
+            timeline: [...(candidate.timeline || []), timelineEntry],
+            updatedAt: new Date().toISOString()
+          });
+
+          const result = await db.candidates.get(candidate.id);
+          console.log('✅ Candidate stage updated via IndexedDB with timeline entry');
+          return result;
+        }
+      );
+
       setSavingStage(null);
       setSavedStage(newStage);
       setCandidate(updatedCandidate);
@@ -476,17 +525,15 @@ const CandidateProfile = () => {
               </div>
             )}
 
-            {/* ✅ UPDATED Timeline - Enhanced display */}
+            {/* ✅ Timeline with enhanced display */}
             {activeTab === 'timeline' && (
               <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-200 dark:border-gray-700 transition-colors">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-gray-50 mb-6">📅 Activity Timeline</h3>
                 <div className="space-y-4">
                   {candidate.timeline?.length > 0 ? (
-                    // ✅ Sort timeline entries by timestamp (newest first)
                     candidate.timeline
                       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
                       .map((event, index) => {
-                        // ✅ Handle different event types
                         const getEventIcon = (type) => {
                           switch (type) {
                             case 'stage_change': return '🔄';
@@ -522,14 +569,12 @@ const CandidateProfile = () => {
                                 </span>
                               </div>
                               
-                              {/* ✅ Show description if available */}
                               {event.description && (
                                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                                   {event.description}
                                 </p>
                               )}
                               
-                              {/* ✅ Show stage change details */}
                               {event.type === 'stage_change' && event.metadata && (
                                 <div className="flex items-center space-x-2 text-xs mt-2">
                                   <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded border border-red-200 dark:border-red-700">
@@ -547,7 +592,6 @@ const CandidateProfile = () => {
                                 </div>
                               )}
                               
-                              {/* ✅ Show user info if available */}
                               {event.user && (
                                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                   Updated by: <span className="font-medium">{event.user}</span>

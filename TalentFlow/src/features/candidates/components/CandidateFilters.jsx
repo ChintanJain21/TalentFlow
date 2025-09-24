@@ -23,7 +23,7 @@ const CandidateFilters = ({
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
-      // Trigger search on Enter key
+
     }
   };
 
@@ -37,7 +37,7 @@ const CandidateFilters = ({
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Enhanced Search */}
+      
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" size={20} />
           <input

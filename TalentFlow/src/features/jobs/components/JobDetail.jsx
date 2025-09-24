@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Edit, Archive, ArchiveRestore, Users, MapPin, Building, Calendar, Tag, X, Save, ClipboardList, Plus, CheckCircle } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { db } from '../../../db/database'; // ✅ ADD THIS IMPORT
+import { db } from '../../../db/database';
 
 const JobDetail = () => {
   const { isDark } = useTheme();
@@ -40,7 +40,17 @@ const JobDetail = () => {
     if (id) fetchJobData();
   }, [id]);
 
-  // ✅ FIXED - IndexedDB only data fetching
+  // ✅ SIMPLE - Try API first, fallback to IndexedDB
+  const fetchWithFallback = async (apiCall, fallbackCall) => {
+    try {
+      return await apiCall();
+    } catch (error) {
+      console.warn('API failed, using IndexedDB fallback:', error.message);
+      return await fallbackCall();
+    }
+  };
+
+  // ✅ UPDATED - fetchJobData with MSW + IndexedDB fallback
   const fetchJobData = async () => {
     setLoading(true);
     setError(null);
@@ -52,49 +62,91 @@ const JobDetail = () => {
         return;
       }
 
-      console.log('🔍 Fetching job data from IndexedDB:', jobId);
+      console.log('🔍 Fetching job data:', jobId);
 
-      // Fetch job from IndexedDB
-      const jobData = await db.jobs.get(jobId);
-      if (!jobData) {
-        setError('Job not found');
-        return;
-      }
+      const result = await fetchWithFallback(
+        // Try MSW API first
+        async () => {
+          // Fetch job details
+          const jobResponse = await fetch(`/api/jobs/${jobId}`);
+          if (jobResponse.status === 404) {
+            throw new Error('Job not found');
+          }
+          if (!jobResponse.ok) throw new Error(`HTTP ${jobResponse.status}`);
 
-      // Fetch candidates for this job
-      const jobCandidates = await db.candidates
-        .where('jobId')
-        .equals(jobId)
-        .toArray();
+          // Fetch candidates for this job
+          const candidatesResponse = await fetch(`/api/candidates?jobId=${jobId}&page=1&pageSize=2000`);
+          const candidatesData = candidatesResponse.ok ? await candidatesResponse.json() : { data: [] };
 
-      // Check if assessment exists for this job
-      const jobAssessments = await db.assessments
-        .where('jobId')
-        .equals(jobId)
-        .toArray();
+          // Fetch assessments for this job
+          const assessmentsResponse = await fetch(`/api/assessments/${jobId}`);
+          const assessmentData = assessmentsResponse.ok ? await assessmentsResponse.json() : null;
 
-      console.log('✅ Job data loaded:', {
-        job: jobData.title,
-        candidates: jobCandidates.length,
-        assessments: jobAssessments.length
-      });
+          const jobData = await jobResponse.json();
+          const jobCandidates = candidatesData.data || [];
 
-      setJob(jobData);
-      setEditForm(jobData);
-      setCandidates(jobCandidates.slice(0, 5)); // Show first 5 candidates
-      setCandidateCount(jobCandidates.length);
-      setAssessmentExists(jobAssessments.length > 0);
+          console.log('✅ Job data loaded via MSW API:', {
+            job: jobData.title,
+            candidates: jobCandidates.length,
+            assessment: !!assessmentData
+          });
+
+          return {
+            job: jobData,
+            candidates: jobCandidates,
+            assessmentExists: !!assessmentData
+          };
+        },
+        // Fallback to IndexedDB
+        async () => {
+          // Fetch job from IndexedDB
+          const jobData = await db.jobs.get(jobId);
+          if (!jobData) {
+            throw new Error('Job not found');
+          }
+
+          // Fetch candidates for this job
+          const jobCandidates = await db.candidates
+            .where('jobId')
+            .equals(jobId)
+            .toArray();
+
+          // Check if assessment exists for this job
+          const jobAssessments = await db.assessments
+            .where('jobId')
+            .equals(jobId)
+            .toArray();
+
+          console.log('✅ Job data loaded from IndexedDB:', {
+            job: jobData.title,
+            candidates: jobCandidates.length,
+            assessments: jobAssessments.length
+          });
+
+          return {
+            job: jobData,
+            candidates: jobCandidates,
+            assessmentExists: jobAssessments.length > 0
+          };
+        }
+      );
+
+      setJob(result.job);
+      setEditForm(result.job);
+      setCandidates(result.candidates.slice(0, 5)); // Show first 5 candidates
+      setCandidateCount(result.candidates.length);
+      setAssessmentExists(result.assessmentExists);
 
     } catch (error) {
       console.error('❌ Error fetching job data:', error);
-      setError('Failed to load job');
+      setError(error.message || 'Failed to load job');
     } finally {
       setLoading(false);
       setCheckingAssessment(false);
     }
   };
 
-  // ✅ FIXED - IndexedDB job update
+  // ✅ UPDATED - handleSaveJob with MSW + IndexedDB fallback
   const handleSaveJob = async () => {
     setSaving(true);
     try {
@@ -106,13 +158,32 @@ const JobDetail = () => {
         updatedAt: new Date().toISOString()
       };
 
-      await db.jobs.update(job.id, updateData);
-      
-      const updatedJob = await db.jobs.get(job.id);
+      const updatedJob = await fetchWithFallback(
+        // Try MSW API first
+        async () => {
+          const response = await fetch(`/api/jobs/${job.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updateData),
+          });
+
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          
+          console.log('✅ Job updated via MSW API');
+          return await response.json();
+        },
+        // Fallback to IndexedDB
+        async () => {
+          await db.jobs.update(job.id, updateData);
+          const result = await db.jobs.get(job.id);
+          console.log('✅ Job updated via IndexedDB');
+          return result;
+        }
+      );
+
       setJob(updatedJob);
       setShowEditModal(false);
       
-      console.log('✅ Job updated successfully');
     } catch (error) {
       console.error('❌ Failed to update job:', error);
       alert('Failed to update job');
@@ -121,7 +192,7 @@ const JobDetail = () => {
     }
   };
 
-  // ✅ FIXED - IndexedDB archive toggle
+  // ✅ UPDATED - handleArchiveToggle with MSW + IndexedDB fallback
   const handleArchiveToggle = async () => {
     if (!job) return;
     setUpdating(true);
@@ -129,15 +200,38 @@ const JobDetail = () => {
     try {
       const newStatus = job.status === 'active' ? 'archived' : 'active';
       
-      await db.jobs.update(job.id, {
-        status: newStatus,
-        updatedAt: new Date().toISOString()
-      });
+      const updatedJob = await fetchWithFallback(
+        // Try MSW API first
+        async () => {
+          const response = await fetch(`/api/jobs/${job.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              status: newStatus,
+              updatedAt: new Date().toISOString()
+            }),
+          });
 
-      const updatedJob = await db.jobs.get(job.id);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          
+          console.log('✅ Job status updated via MSW API:', newStatus);
+          return await response.json();
+        },
+        // Fallback to IndexedDB
+        async () => {
+          await db.jobs.update(job.id, {
+            status: newStatus,
+            updatedAt: new Date().toISOString()
+          });
+
+          const result = await db.jobs.get(job.id);
+          console.log('✅ Job status updated via IndexedDB:', newStatus);
+          return result;
+        }
+      );
+
       setJob(updatedJob);
       
-      console.log('✅ Job status updated:', newStatus);
     } catch (error) {
       console.error('❌ Failed to update job status:', error);
       alert('Failed to update job status');
@@ -371,7 +465,7 @@ const JobDetail = () => {
             </div>
           </div>
 
-          {/* Sidebar - NO QUICK ACTIONS */}
+          {/* Sidebar */}
           <div className="space-y-6">
             <div className={`${styles.card} p-6`}>
               <h3 className={`text-lg font-bold ${styles.text.title} mb-4`}>Job Statistics</h3>
